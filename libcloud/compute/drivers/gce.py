@@ -7629,6 +7629,7 @@ class GCENodeDriver(NodeDriver):
             status['name'], node_attrs['size'], node_attrs['image'],
             node_attrs['location'], node_attrs['network'], node_attrs['tags'],
             node_attrs['metadata'], external_ip=node_attrs['external_ip'],
+            ex_disk_type=node_attrs['ex_disk_type'],
             ex_service_accounts=node_attrs['ex_service_accounts'],
             description=node_attrs['description'],
             ex_can_ip_forward=node_attrs['ex_can_ip_forward'],
