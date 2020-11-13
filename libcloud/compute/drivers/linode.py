@@ -770,6 +770,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         'rebuilding': NodeState.UPDATING,
         'cloning': NodeState.MIGRATING,
         'restoring': NodeState.PENDING,
+        'resizing': NodeState.RECONFIGURING
     }
 
     LINODE_DISK_STATES = {
