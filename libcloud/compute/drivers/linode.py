@@ -987,6 +987,20 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
                                            method='POST').object
         return self._to_node(response)
 
+    def ex_get_node(self, node_id):
+        """
+        Return a Node object based on a node ID.
+
+        :keyword node_id: Node's ID
+        :type    node_id: ``str``
+
+        :return: Created node
+        :rtype  : :class:`Node`
+        """
+        response = self.connection.request('/v4/linode/instances/%s'
+                                           % node_id).object
+        return self._to_node(response)
+
     def ex_list_disks(self, node):
         """
         List disks associated with the node.
@@ -1175,14 +1189,15 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         """Attaches a volume to a node.
         Volume and node must be located in the same region
 
+        :param node: Node to attach the volume to(required)
+        :type node: :class:`Node`
+
         :param volume: Volume to be attached (required)
         :type volume: :class:`StorageVolume`
 
-        :param volume: Node to attach the volume to(required)
-        :type volume: :class:`Node`
-
-        :keyword persist_across_boots: Node to attach the volume to(required)
-        :type volume: :class:`Node`
+        :keyword persist_across_boots: Wether volume should be \
+        attached to node across boots
+        :type persist_across_boots: `bool`
 
         :rtype: :class: `StorageVolume`
         """
@@ -1300,6 +1315,20 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
 
         return self._to_volume(response)
 
+    def ex_get_volume(self, volume_id):
+        """
+        Return a Volume object based on a volume ID.
+
+        :param  volume_id: Volume's id
+        :type   volume_id: ``str``
+
+        :return:  A StorageVolume object for the volume
+        :rtype:   :class:`StorageVolume`
+        """
+        response = self.connection.request('/v4/volumes/%s'
+                                           % volume_id).object
+        return self._to_volume(response)
+
     def create_image(self, disk, name=None, description=None):
         """Creates a private image from a LinodeDisk.
          Images are limited to three per account.
@@ -1382,7 +1411,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         :type node: :class:`Node`
 
         :keyword address_type: Type of IP address
-        :type address_type: `bool`
+        :type address_type: `str`
 
         :return: The newly created LinodeIPAddress
         :rtype: :class:`LinodeIPAddress`
@@ -1408,7 +1437,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
                                            method='POST').object
         return self._to_address(response)
 
-    def ex_share_address(self, node, addresses=[]):
+    def ex_share_address(self, node, addresses):
         """Shares an IP with another node.This can be used to allow one Linode
          to begin serving requests should another become unresponsive.
 
@@ -1449,7 +1478,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         :type node: :class:`Node`
 
         :param size: the size of the new node
-        :type node: :class:`NodeSize`
+        :type size: :class:`NodeSize`
 
         :keyword allow_auto_disk_resize: Automatically resize disks \
         when resizing a node.
