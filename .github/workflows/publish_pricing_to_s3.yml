@@ -1,10 +1,10 @@
 # Workflow which runs on daily basis and publishes pricing data to S3 bucket
 name: Publish pricing.json to S3 bucket
 
-on:
-  schedule:
-    - cron: '0 13 * * *'
-    - cron: '0 2 * * *'
+#on:
+#  schedule:
+#    - cron: '0 13 * * *'
+#    - cron: '0 2 * * *'
 
 jobs:
   generate_and_publish_pricing_data:

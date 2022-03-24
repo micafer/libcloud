@@ -2,10 +2,10 @@
 # pip on all the supported Python versions
 name: Install stable version using pip
 
-on:
-  schedule:
-    - cron: '0 13 * * *'
-    - cron: '0 2 * * *'
+#on:
+#  schedule:
+#    - cron: '0 13 * * *'
+#    - cron: '0 2 * * *'
 
 jobs:
   install_and_verify:
