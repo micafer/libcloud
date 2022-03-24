@@ -430,11 +430,12 @@ class GCENodeDriverTest(GoogleTestCase, TestCaseMixin):
         all_deprecated_images = self.driver.list_images(ex_include_deprecated=True)
         debian_images = self.driver.list_images(ex_project="debian-cloud")
         local_plus_deb = self.driver.list_images(["debian-cloud", "project_name"])
-        self.assertEqual(len(local_images), 50)
-        self.assertEqual(len(all_deprecated_images), 178)
+        self.assertEqual(len(local_images), 52)
+        self.assertEqual(len(all_deprecated_images), 180)
         self.assertEqual(len(debian_images), 2)
-        self.assertEqual(len(local_plus_deb), 4)
-        self.assertEqual(local_images[0].name, "custom-image")
+        self.assertEqual(len(local_plus_deb), 6)
+        self.assertEqual(local_images[0].name, "custom-image1")
+        self.assertEqual(local_images[2].name, "custom-image")
         self.assertEqual(debian_images[1].name, "debian-7-wheezy-v20131120")
 
     def test_ex_destroy_instancegroup(self):
@@ -2525,6 +2526,65 @@ class GCENodeDriverTest(GoogleTestCase, TestCaseMixin):
         zone_no_mw = self.driver.ex_get_zone("us-central1-a")
         self.assertIsNone(zone_no_mw.time_until_mw)
 
+    def test_driver_zone_attributes(self):
+        zones = self.driver.ex_list_zones()
+        self.assertEqual(len(self.driver.zone_dict), len(zones))
+        self.assertEqual(len(self.driver.zone_list), len(zones))
+        for zone, fetched_zone in zip(self.driver.zone_list, zones):
+            self.assertEqual(zone.id, fetched_zone.id)
+            self.assertEqual(zone.name, fetched_zone.name)
+            self.assertEqual(zone.status, fetched_zone.status)
+
+    def test_driver_region_attributes(self):
+        regions = self.driver.ex_list_regions()
+        self.assertEqual(len(self.driver.region_dict), len(regions))
+        self.assertEqual(len(self.driver.region_list), len(regions))
+        for region, fetched_region in zip(self.driver.region_list, regions):
+            self.assertEqual(region.id, fetched_region.id)
+            self.assertEqual(region.name, fetched_region.name)
+            self.assertEqual(region.status, fetched_region.status)
+
+
+class GCENodeDriverTest2(GoogleTestCase):
+    """
+    GCE Test Class, test node driver without passing `datacenter` parameter on initialization.
+    """
+
+    def setUp(self):
+        GCEMockHttp.test = self
+        GCENodeDriver.connectionCls.conn_class = GCEMockHttp
+        GoogleBaseAuthConnection.conn_class = GoogleAuthMockHttp
+        GCEMockHttp.type = None
+        kwargs = GCE_KEYWORD_PARAMS.copy()
+        kwargs["auth_type"] = "IA"
+        self.driver = GCENodeDriver(*GCE_PARAMS, **kwargs)
+
+    def test_zone_attributes(self):
+        self.assertIsNone(self.driver._zone_dict)
+        self.assertIsNone(self.driver._zone_list)
+
+        zones = self.driver.ex_list_zones()
+
+        self.assertEqual(len(self.driver.zone_list), len(zones))
+        self.assertEqual(len(self.driver.zone_dict), len(zones))
+        for zone, fetched_zone in zip(self.driver.zone_list, zones):
+            self.assertEqual(zone.id, fetched_zone.id)
+            self.assertEqual(zone.name, fetched_zone.name)
+            self.assertEqual(zone.status, fetched_zone.status)
+
+    def test_region_attributes(self):
+        self.assertIsNone(self.driver._region_dict)
+        self.assertIsNone(self.driver._region_list)
+
+        regions = self.driver.ex_list_regions()
+
+        self.assertEqual(len(self.driver.region_list), len(regions))
+        self.assertEqual(len(self.driver.region_dict), len(regions))
+        for region, fetched_region in zip(self.driver.region_list, regions):
+            self.assertEqual(region.id, fetched_region.id)
+            self.assertEqual(region.name, fetched_region.name)
+            self.assertEqual(region.status, fetched_region.status)
+
 
 class GCEMockHttp(MockHttp, unittest.TestCase):
     fixtures = ComputeFileFixtures("gce")
@@ -2820,7 +2880,11 @@ class GCEMockHttp(MockHttp, unittest.TestCase):
     def _global_images(self, method, url, body, headers):
         if method == "POST":
             body = self.fixtures.load("global_images_post.json")
+        elif "maxResults" in url and "pageToken" not in url:
+            body = self.fixtures.load("global_images_paged.json")
         else:
+            if "maxResults" in url:
+                self.assertIn("pageToken=token", url)
             body = self.fixtures.load("global_images.json")
         return (httplib.OK, body, self.json_hdr, httplib.responses[httplib.OK])
 

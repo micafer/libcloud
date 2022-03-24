@@ -130,6 +130,25 @@ class GCEConnection(GoogleBaseConnection):
             params.update(self.gce_params)
         return params, headers
 
+    def paginated_request(self, *args, **kwargs):
+        """
+        Generic function to create a paginated request to any API call
+        not only aggregated or zone ones as request_aggregated_items.
+
+        @inherits: :class:`GoogleBaseConnection.request`
+        """
+        more_results = True
+        items = []
+        max_results = kwargs["max_results"] if "max_results" in kwargs else 500
+        params = {"maxResults": max_results}
+        while more_results:
+            self.gce_params = params
+            response = self.request(*args, **kwargs)
+            items.extend(response.object.get("items", []))
+            more_results = "pageToken" in params
+
+        return {"items": items}
+
     def request(self, *args, **kwargs):
         """
         Perform request then do GCE-specific processing of URL params.
@@ -224,14 +243,13 @@ class GCEConnection(GoogleBaseConnection):
         """
         merged_items = {}
         for resp in response_list:
-            if "items" in resp:
-                # example k would be a zone or region name
-                # example v would be { "disks" : [], "otherkey" : "..." }
-                for k, v in resp["items"].items():
-                    if list_name in v:
-                        merged_items.setdefault(k, {}).setdefault(list_name, [])
-                        # Combine the list with the existing list.
-                        merged_items[k][list_name] += v[list_name]
+            # example k would be a zone or region name
+            # example v would be { "disks" : [], "otherkey" : "..." }
+            for k, v in resp.get("items", {}).items():
+                if list_name in v:
+                    merged_items.setdefault(k, {}).setdefault(list_name, [])
+                    # Combine the list with the existing list.
+                    merged_items[k][list_name] += v[list_name]
         return {"items": merged_items}
 
 
@@ -2090,19 +2108,17 @@ class GCENodeDriver(NodeDriver):
         # Cache Zone and Region information to reduce API calls and
         # increase speed
         self.base_path = "/compute/%s/projects/%s" % (API_VERSION, self.project)
-        self.zone_list = self.ex_list_zones()
-        self.zone_dict = {}
-        for zone in self.zone_list:
-            self.zone_dict[zone.name] = zone
+
+        self._zone_dict = None
+        self._zone_list = None
+
         if datacenter:
             self.zone = self.ex_get_zone(datacenter)
         else:
             self.zone = None
 
-        self.region_list = self.ex_list_regions()
-        self.region_dict = {}
-        for region in self.region_list:
-            self.region_dict[region.name] = region
+        self._region_dict = None
+        self._region_list = None
 
         if self.zone:
             self.region = self._get_region_from_zone(self.zone)
@@ -2112,6 +2128,32 @@ class GCENodeDriver(NodeDriver):
         # Volume details are looked up in this name-zone dict.
         # It is populated if the volume name is not found or the dict is empty.
         self._ex_volume_dict = {}
+
+    @property
+    def zone_dict(self):
+        if self._zone_dict is None:
+            zones = self.ex_list_zones()
+            self._zone_dict = {zone.name: zone for zone in zones}
+        return self._zone_dict
+
+    @property
+    def zone_list(self):
+        if self._zone_list is None:
+            self._zone_list = list(self.zone_dict.values())
+        return self._zone_list
+
+    @property
+    def region_dict(self):
+        if self._region_dict is None:
+            regions = self.ex_list_regions()
+            self._region_dict = {region.name: region for region in regions}
+        return self._region_dict
+
+    @property
+    def region_list(self):
+        if self._region_list is None:
+            self._region_list = list(self.region_dict.values())
+        return self._region_list
 
     def ex_add_access_config(self, node, name, nic, nat_ip=None, config_type=None):
         """
@@ -2609,7 +2651,7 @@ class GCENodeDriver(NodeDriver):
         list_images = []
         request = "/global/images"
         if ex_project is None:
-            response = self.connection.request(request, method="GET").object
+            response = self.connection.paginated_request(request, method="GET")
             for img in response.get("items", []):
                 if "deprecated" not in img:
                     list_images.append(self._to_node_image(img))
@@ -2627,8 +2669,7 @@ class GCENodeDriver(NodeDriver):
                 new_request_path = save_request_path.replace(self.project, proj)
                 self.connection.request_path = new_request_path
                 try:
-                    self.connection.gce_params = {'maxResults': 1500}
-                    response = self.connection.request(request, method="GET").object
+                    response = self.connection.paginated_request(request, method="GET")
                 except Exception:
                     raise
                 finally:

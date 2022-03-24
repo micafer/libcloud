@@ -4,8 +4,34 @@
 Changes in Apache Libcloud in development
 -----------------------------------------
 
+Compute
+~~~~~~~
+
+- [GCE] Retrieve regions and zones lazily when they are first accessed (via
+  self.zone_{dict,list} and self.region_{dict,list} attribute) instead of
+  retrieving them inside the driver constructor.
+
+  (GITHUB-1661, GITHUB-1661)
+  [Dimitris Galanis - @dimgal1]
+
+Changes in Apache Libcloud 3.5.0
+--------------------------------
+
 Common
 ~~~~~~
+
+- Support for Python 3.5 which has been EOL for more than a year now has been
+  removed.
+
+  If you still want to use Libcloud with Python 3.5, you should use an older
+  release which still supports Python 3.5.
+  (GITHUB-1620)
+
+- Update code which retries failed HTTP requests to also retry failed "raw"
+  requests and make sure we also wrap and retry piece of code where Response
+  class is instantiated and exceptions can be thrown.
+  [Daniel Draper - @Germandrummer92]
+  (GITHUB-1592)
 
 - Update AWS error response parsing code so it also correctly handles error XML
   responses without a namespace in the response body.
@@ -25,9 +51,75 @@ Compute
   (GITHUB-1629)
   [Miguel Caballer - @micafer]
 
+- [OpenStack] OpenStack: Move floating IP functions to use network service
+  instead of nova.
+
+  This change affects all the floating ip related functions of the
+  ``OpenStack_2_NodeDriver`` class. Two new classes have been added
+  ``OpenStack_2_FloatingIpPool`` and ``OpenStack_2_FloatingIpAddress``.
+  The main change applies to the FloatingIP class where ``node_id``
+  property cannot be directly obtained from FloatingIP information and it
+  must be gotten from the related Port information with the ``get_node_id``
+  method.
+  (GITHUB-1638)
+  [Miguel Caballer - @micafer]
+
 - [OpenStack] Avoid raising exception if ip is not found.
   (GITHUB-1595)
   [Miguel Caballer - @micafer]
+
+- [Azure ARM] Add option to create node from Compute Gallery image.
+  (GITHUB-1643)
+  [Robert Harris - @rgharris]
+
+- [Azure ARM] Add create node OS disk delete option.
+  (GITHUB-1644)
+  [Robert Harris - @rgharris]
+
+- [EC2] Add missing ``creation_date`` NodeImage extra.
+  (GITHUB-1641)
+  [Thomas JOUANNOT - @mazerty]
+
+- [GCE] Allow ``credentials`` argument which is provided to the driver
+  constructor to also be either a Python dictionary with the credentials object
+  or a JSON string with the serialized credentials object. That's in addition
+  to supporting passing in path to the credentials file or string PEM version of
+  the key.
+  (GITHUB-1214)
+  [@bverschueren]
+
+- [OpenStack] Personality field in the server requests of OpenStack must
+  be optional
+  (GITHUB-1649)
+  [Miguel Caballer - @micafer]
+
+- [OpenStack] headers field are overwrited in case of POST of
+  PUT methods in OpenStack connection
+  (GITHUB-1650)
+  [Miguel Caballer - @micafer]
+
+- [EC2] Update supported EC2 regions and instance sizes and add support
+  for eu-south-1 region.
+  (GITHUB-1656)
+  [Arturo Noha - @r2ronoha]
+
+- [OpenStack] Add new ``ex_force_microversion`` constructor argument with which
+  user can specify which micro version to use (
+  https://docs.openstack.org/api-guide/compute/microversions.html).
+  (GITHUB-1647, GITHUB-1648)
+
+- [GCE] Add ``paginated_request()`` method to GCEConnection and update
+  ``ex_list_project_images()`` method to utilize it.
+  (GITHUB-1646, GITHUB-1655)
+  [Miguel Caballer - @micafer]
+
+- [OpenStack] Fix regression which was inadvertently introduced in #1557 which
+  would cause some OpenStack authentication methods to not work and result in
+  an exception.
+
+  Reported by @LanderOtto via #1659.
+  (GITHUB-1659, GITHUB-1660)
+  [Tomaz Muraus - @Kami]
 
 Storage
 ~~~~~~~
@@ -52,21 +144,9 @@ Storage
   (GITHUB-1631)
   [Tomaz Muraus - @Kami]
 
-Common
-~~~~~~
-
-- Support for Python 3.5 which has been EOL for more than a year now has been
-  removed.
-
-  If you still want to use Libcloud with Python 3.5, you should use an older
-  release which still supports Python 3.5.
-  (GITHUB-1620)
-
-- Update code which retries failed HTTP requests to also retry failed "raw"
-  requests and make sure we also wrap and retry piece of code where Response
-  class is instantiated and exceptions can be thrown.
-  [Daniel Draper - @Germandrummer92]
-  (GITHUB-1592)
+- [Scaleway] Add new driver for the Scaleway Object Storage.
+  (GITHUB-1633)
+  [@reixd]
 
 Other
 ~~~~~
@@ -1124,7 +1204,7 @@ Changes in Apache Libcloud v2.8.0
 ---------------------------------
 
 Common
-------
+~~~~~~
 
 - Fix a regression with ``get_driver()`` method not working if ``provider``
   argument value was a string (e.g. using ``get_driver('openstack')``
@@ -1154,7 +1234,7 @@ Common
   [Tomaz Muraus]
 
 Compute
--------
+~~~~~~~
 
 - [DigitalOcean] Fix ``attach_volume`` and ``detach_volume`` methods.
   Previously those two methods incorrectly passed volume id instead of
@@ -1211,7 +1291,7 @@ Compute
   [Tomaz Muraus]
 
 Storage
--------
+~~~~~~~
 
 - [AWS S3] Make sure ``host`` driver constructor argument has priority
   over ``region`` argument.
@@ -1226,14 +1306,14 @@ Changes in Apache Libcloud v2.7.0
 ---------------------------------
 
 General
--------
+~~~~~~~
 
 - Test code with Python 3.8 and advertise that we also support Python 3.8.
   (GITHUB-1371, GITHUB-1374)
   [Tomaz Muraus]
 
 Common
-------
+~~~~~~
 
 - [OpenStack] Fix OpenStack project scoped token authentication. The driver
   constructors now accept ``ex_tenant_domain_id`` argument which tells
@@ -1242,7 +1322,7 @@ Common
   [kshtsk]
 
 Compute
--------
+~~~~~~~
 
 - Introduce type annotations for the base compute API methods. This means you
   can now leverage mypy to type check (with some limitations) your code which
