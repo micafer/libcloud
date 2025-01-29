@@ -18,17 +18,16 @@ Ovh driver
 from libcloud.utils.py3 import httplib
 from libcloud.common.ovh import API_ROOT, OvhConnection
 from libcloud.compute.base import (
-    NodeDriver,
-    NodeSize,
     Node,
-    NodeLocation,
+    NodeSize,
     NodeImage,
+    NodeDriver,
+    NodeLocation,
     StorageVolume,
     VolumeSnapshot,
 )
 from libcloud.compute.types import Provider, StorageVolumeState, VolumeSnapshotState
-from libcloud.compute.drivers.openstack import OpenStackNodeDriver
-from libcloud.compute.drivers.openstack import OpenStackKeyPair
+from libcloud.compute.drivers.openstack import OpenStackKeyPair, OpenStackNodeDriver
 
 
 class OvhNodeDriver(NodeDriver):
@@ -75,12 +74,10 @@ class OvhNodeDriver(NodeDriver):
         self.region = region
         self.project_id = ex_project_id
         self.consumer_key = ex_consumer_key
-        NodeDriver.__init__(
-            self, key, secret, ex_consumer_key=ex_consumer_key, region=region
-        )
+        NodeDriver.__init__(self, key, secret, ex_consumer_key=ex_consumer_key, region=region)
 
     def _get_project_action(self, suffix):
-        base_url = "%s/cloud/project/%s/" % (API_ROOT, self.project_id)
+        base_url = "{}/cloud/project/{}/".format(API_ROOT, self.project_id)
         return base_url + suffix
 
     @classmethod
@@ -187,7 +184,7 @@ class OvhNodeDriver(NodeDriver):
         :keyword location: Location (region) used as filter
         :type    location: :class:`NodeLocation`
 
-        :keyword ex_size: Exclude images which are uncompatible with given size
+        :keyword ex_size: Exclude images which are incompatible with given size
         :type    ex_size: :class:`NodeImage`
 
         :return: List of images
@@ -303,7 +300,7 @@ class OvhNodeDriver(NodeDriver):
         :keyword ex_volume_type: ``'classic'`` or ``'high-speed'``
         :type ex_volume_type: ``str``
 
-        :keyword ex_description: Optionnal description of volume
+        :keyword ex_description: Optional description of volume
         :type ex_description: str
 
         :return:  Storage Volume object
@@ -367,7 +364,7 @@ class OvhNodeDriver(NodeDriver):
         :param volume: The ID of the volume
         :type volume: :class:`StorageVolume`
 
-        :param device: Unsed parameter
+        :param device: Unused parameter
 
         :return: True or False representing operation successful
         :rtype:   ``bool``
@@ -384,7 +381,7 @@ class OvhNodeDriver(NodeDriver):
         :param volume: The ID of the volume
         :type volume: :class:`StorageVolume`
 
-        :param ex_node: Node to detach from (optionnal if volume is attached
+        :param ex_node: Node to detach from (optional if volume is attached
                         to only one node)
         :type ex_node: :class:`Node`
 
@@ -398,8 +395,7 @@ class OvhNodeDriver(NodeDriver):
         if ex_node is None:
             if len(volume.extra["attachedTo"]) != 1:
                 err_msg = (
-                    "Volume '%s' has more or less than one attached"
-                    "nodes, you must specify one."
+                    "Volume '%s' has more or less than one attached" "nodes, you must specify one."
                 )
                 raise Exception(err_msg)
             ex_node = self.ex_get_node(volume.extra["attachedTo"][0])
@@ -487,9 +483,7 @@ class OvhNodeDriver(NodeDriver):
         extra.pop("id")
         extra.pop("name")
         extra.pop("size")
-        state = self.VOLUME_STATE_MAP.get(
-            obj.pop("status", None), StorageVolumeState.UNKNOWN
-        )
+        state = self.VOLUME_STATE_MAP.get(obj.pop("status", None), StorageVolumeState.UNKNOWN)
         return StorageVolume(
             id=obj["id"],
             name=obj["name"],

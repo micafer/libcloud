@@ -5,6 +5,117 @@ This page describes how to upgrade from a previous version to a new version
 which contains backward incompatible or semi-incompatible changes and how to
 preserve the old behavior when this is possible.
 
+Libcloud 3.9.0
+--------------
+
+* Support for Python 3.7 which has been EOL for more than a year now has been
+  removed.
+
+  If you still want to use Libcloud with Python 3.7, you should use an older
+  release which still supports Python 3.7.
+
+* [AZURE ARM] Added a new argument to destroy_node() to also delete node's managed
+  OS disk as part of the node's deletion. Defaults to true. This can be reverted by
+  setting the argument to false in the call:
+
+  .. sourcecode:: python
+
+    destroy_node(..., ex_destroy_os_disk=False)
+
+* [Equinix Metal] All the volume and volume snapshot management methods which
+  have been unsupported on the server side since 2021 have been removed from the
+  driver. In addition to that, `disk` and `disk_size` argument has been removed
+  from the `create_node()`  method.
+
+  If your code is using those arguments / passing them to the `create_node()`
+  method it needs to be updated and those arguments removed.
+
+* [KubeVirt] Changes to the `create_node()` method: 
+
+  - The `ports` argument has been renamed to `ex_ports`. 
+  - The `ex_disks` argument has been redefined to support all volume types. 
+
+  The deprecated `ex_disks` format, which only supports `PersistentVolumeClaim`,
+  is as follows:
+
+  .. sourcecode:: python
+
+    ex_disks=[{"bus": "", "device": "", "disk_type": "", "name": "", "claim_name": "", "size": "", "storage_class_name": "", "volume_mode": "", "access_mode": ""}]
+
+  The new format is:
+
+  .. sourcecode:: python
+
+    ex_disks=[{"bus": "", "device": "", "disk_type": "", "name": "", "volume_spec": {...}}]
+
+  Here, `volume_spec` is the `disk_type` specific settings, which aligns with the 
+  KubeVirt user guide on disks and volumes 
+  (https://kubevirt.io/user-guide/virtual_machines/disks_and_volumes). 
+
+  For example, for PVC:
+
+  .. sourcecode:: python
+
+    ex_disks=[{ ..., "volume_spec": {{"claim_name": "", "size": "", "storage_class_name": "", "volume_mode": "", "access_mode": ""} }]
+
+  If your code uses these arguments or passes them to the `create_node()`
+  method, it will need to be updated accordingly.
+
+
+Libcloud 3.8.0
+--------------
+
+* [LINODE API v4] Order of arguments to create_node() was changed. The order of the
+  arguments for name and size were not consistent with the rest of the codebase
+  and with the standard Libcloud API.
+
+  This is possibly a breaking change for anyone using a previous version.
+
+  New method signature:
+
+  .. sourcecode:: python
+
+    def create_node(self, location, name, size, image, ...)
+
+  Old method signature:
+
+  .. sourcecode:: python
+
+    def create_node(self, location, size=None, image=None, name=None, ...)
+
+Libcloud 3.7.0
+--------------
+
+* Support for Python 3.6 which has been EOL for more than a year now has been
+  removed.
+
+  If you still want to use Libcloud with Python 3.6, you should use an older
+  release which still supports Python 3.6.
+
+Libcloud 3.6.0
+--------------
+
+* Compatibility layer has been introduced for paramiko SSH based deployment
+  functionality.
+
+  paramiko v2.9.0 introduced a change to prefer SHA-2 variants of RSA key
+  verification algorithm (https://github.com/paramiko/paramiko/blob/2.9.0/sites/www/changelog.rst#changelog).
+  With this version paramiko would fail to connect to older OpenSSH
+  servers which don't support this algorithm (e.g. default setup on Ubuntu
+  14.04) and throw authentication error.
+
+  The code has been updated to be backward compatible. It first tries to
+  connect to the server using default preferred algorithm values and in case
+  that fails, it will fall back to the old approach with SHA-2 variants
+  disabled.
+
+  This functionality can be disabled by setting
+  ``LIBCLOUD_PARAMIKO_SHA2_BACKWARD_COMPATIBILITY``environment variable to
+  ``false``.
+
+  For security reasons (to prevent possible downgrade attacks and similar) you
+  are encouraged to do that in case you know you won't be connecting to any old
+
 Libcloud 3.5.0
 --------------
 
@@ -13,6 +124,14 @@ Libcloud 3.5.0
 
   If you still want to use Libcloud with Python 3.5, you should use an older
   release which still supports Python 3.5.
+
+* The OpenStack compute driver has moved the floating ip related functions
+  from nova to neutron. This change affects all the floating ip related
+  functions of the ``OpenStack_2_NodeDriver`` class. Two new classes have been
+  added ``OpenStack_2_FloatingIpPool`` and ``OpenStack_2_FloatingIpAddress``.
+  The main change applies to the FloatingIP class where ``node_id`` property
+  cannot be directly obtained from FloatingIP information and it must be
+  gotten from the related Port information with the ``get_node_id()`` method.
 
 Libcloud 3.4.0
 --------------
@@ -1032,7 +1151,7 @@ Libcloud 0.8
   instance.
 
 For a full list of changes, please see the `CHANGES file
-<https://git-wip-us.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=fd1f9cd8917bf9d9c5f4d5344872dbccba894444;hb=b26812db71e6c36be3cc5f7fcb87f82b267bfddd>`__.
+<https://git.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=fd1f9cd8917bf9d9c5f4d5344872dbccba894444;hb=b26812db71e6c36be3cc5f7fcb87f82b267bfddd>`__.
 
 Libcloud 0.7
 ------------
@@ -1079,7 +1198,7 @@ In the ``contrib/`` directory you can also find a simple bash script which can
 perform a search and replace for you - `migrate_paths.py <https://svn.apache.org/repos/asf/libcloud/trunk/contrib/migrate_paths.sh>`_.
 
 For a full list of changes, please see the `CHANGES file
-<https://git-wip-us.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=276948338c2581de1178e51f7f7cdbd4e7ba9286;hb=2ad8f3fa1f258d6c53d7b058cdc6cd9ab1fd579b>`__.
+<https://git.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=276948338c2581de1178e51f7f7cdbd4e7ba9286;hb=2ad8f3fa1f258d6c53d7b058cdc6cd9ab1fd579b>`__.
 
 Libcloud 0.6
 ------------

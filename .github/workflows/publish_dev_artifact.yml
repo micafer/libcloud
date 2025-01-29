@@ -13,6 +13,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read  # for actions/checkout to fetch code
+
 jobs:
   generate_and_publish_dev_release_artifacts:
     name: Generate and Publish Dev Release Artifacts
@@ -30,22 +33,26 @@ jobs:
           fetch-depth: 1
 
       - name: Use Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.8
 
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install wheel
+          pip install build
 
       - name: Create Dev Artifacts
         run: |
-          python setup.py sdist --formats=bztar,zip,gztar
-          python setup.py bdist_wheel
+          python -m build
+          ls -la dist
+
+          # Ensure artifacts have been created
+          ls -la dist | grep .tar.gz
+          ls -la dist | grep .whl
 
       - name: Store dev artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: libcloud-dev-artifacts
           retention-days: 60

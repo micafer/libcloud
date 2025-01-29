@@ -15,6 +15,15 @@
 #  KIND, either express or implied.  See the License for the
 #  specific language governing permissions and limitations
 #  under the License.
+set -e
+
+function cleanup() {
+    rm -f dist/apache*libcloud*.*
+}
+
+cleanup
+
+trap cleanup EXIT
 
 # Verify library installs without any dependencies when using python setup.py
 # install
@@ -26,10 +35,10 @@ python --version
 pip show requests && exit 1
 pip show typing && exit 1
 pip show enum34 && exit 1
-pip show apache-libcloud
+pip show apache-libcloud && exit 1
 
 # Install the library
-python setup.py install
+pip install .
 pip show apache-libcloud
 
 # Verify all dependencies were installed

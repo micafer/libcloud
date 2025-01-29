@@ -13,10 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from libcloud.common.aws import DEFAULT_SIGNATURE_VERSION, SignedAWSConnection
 from libcloud.common.types import LibcloudError
-from libcloud.common.aws import SignedAWSConnection, DEFAULT_SIGNATURE_VERSION
-from libcloud.storage.drivers.s3 import BaseS3Connection, S3Connection
-from libcloud.storage.drivers.s3 import BaseS3StorageDriver, API_VERSION
+from libcloud.storage.drivers.s3 import (
+    API_VERSION,
+    S3Connection,
+    BaseS3Connection,
+    BaseS3StorageDriver,
+)
 
 __all__ = ["S3RGWStorageDriver", "S3RGWOutscaleStorageDriver"]
 
@@ -52,8 +56,7 @@ class S3RGWConnectionAWS4(SignedAWSConnection, BaseS3Connection):
         backoff=None,
         **kwargs,
     ):
-
-        super(S3RGWConnectionAWS4, self).__init__(
+        super().__init__(
             user_id,
             key,
             secure,
@@ -85,8 +88,7 @@ class S3RGWConnectionAWS2(S3Connection):
         backoff=None,
         **kwargs,
     ):
-
-        super(S3RGWConnectionAWS2, self).__init__(
+        super().__init__(
             user_id,
             key,
             secure,
@@ -116,7 +118,6 @@ class S3RGWStorageDriver(BaseS3StorageDriver):
         region=S3_RGW_DEFAULT_REGION,
         **kwargs,
     ):
-
         if host is None:
             raise LibcloudError("host required", driver=self)
 
@@ -126,9 +127,7 @@ class S3RGWStorageDriver(BaseS3StorageDriver):
 
         self.ex_location_name = region
         self.region_name = region
-        self.signature_version = str(
-            kwargs.pop("signature_version", DEFAULT_SIGNATURE_VERSION)
-        )
+        self.signature_version = str(kwargs.pop("signature_version", DEFAULT_SIGNATURE_VERSION))
 
         if self.signature_version not in ["2", "4"]:
             raise ValueError("Invalid signature_version: %s" % (self.signature_version))
@@ -139,9 +138,7 @@ class S3RGWStorageDriver(BaseS3StorageDriver):
             self.connectionCls = S3RGWConnectionAWS4
         self.connectionCls.host = host
 
-        super(S3RGWStorageDriver, self).__init__(
-            key, secret, secure, host, port, api_version, region, **kwargs
-        )
+        super().__init__(key, secret, secure, host, port, api_version, region, **kwargs)
 
     def _ex_connection_class_kwargs(self):
         kwargs = {}
@@ -168,6 +165,4 @@ class S3RGWOutscaleStorageDriver(S3RGWStorageDriver):
             raise LibcloudError("Unknown region (%s)" % (region), driver=self)
         host = S3_RGW_OUTSCALE_HOSTS_BY_REGION[region]
         kwargs["name"] = "OUTSCALE Ceph RGW S3 (%s)" % region
-        super(S3RGWOutscaleStorageDriver, self).__init__(
-            key, secret, secure, host, port, api_version, region, **kwargs
-        )
+        super().__init__(key, secret, secure, host, port, api_version, region, **kwargs)

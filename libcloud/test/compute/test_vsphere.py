@@ -15,17 +15,13 @@
 
 import sys
 
-from libcloud.compute.drivers.vsphere import VSphere_REST_NodeDriver
-
+from libcloud.test import MockHttp, unittest
 from libcloud.utils.py3 import httplib
-
-from libcloud.test import unittest
-from libcloud.test import MockHttp
 from libcloud.test.file_fixtures import ComputeFileFixtures
+from libcloud.compute.drivers.vsphere import VSphere_REST_NodeDriver
 
 
 class KubeVirtTestCase(unittest.TestCase):
-
     driver_cls = VSphere_REST_NodeDriver
     fixtures = ComputeFileFixtures("vsphere")
 
@@ -71,7 +67,6 @@ class KubeVirtTestCase(unittest.TestCase):
 
 
 class VSphereMockHttp(MockHttp):
-
     fixtures = ComputeFileFixtures("vsphere")
 
     def _rest_com_vmware_cis_session(self, method, url, body, headers):

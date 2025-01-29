@@ -13,14 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
 import sys
+import unittest
+from unittest import mock
 
-import mock
-
-from libcloud.common.base import LazyObject, Response
-from libcloud.common.exceptions import BaseHTTPError, RateLimitReachedError
 from libcloud.test import LibcloudTestCase
+from libcloud.common.base import Response, LazyObject
+from libcloud.common.exceptions import BaseHTTPError, RateLimitReachedError
 
 
 class LazyObjectTest(LibcloudTestCase):
@@ -71,7 +70,7 @@ class ErrorResponseTest(LibcloudTestCase):
             self.assertEqual(e.retry_after, 120)
         except Exception:
             # We should have got a RateLimitReachedError
-            self.fail("Catched exception should have been RateLimitReachedError")
+            self.fail("Caught exception should have been RateLimitReachedError")
         else:
             # We should have got an exception
             self.fail("HTTP Status 429 response didn't raised an exception")

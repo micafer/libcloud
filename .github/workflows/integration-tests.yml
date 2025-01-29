@@ -12,35 +12,23 @@ on:
 #  schedule:
 #    - cron: '0 1 * * *'
 
+permissions:
+  contents: read  # for actions/checkout to fetch code
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # Needed if we want colors in pytest output without tty and script -e -c wrapper
+  PY_COLORS: "1"
+  FORCE_COLOR: "1"
+
 jobs:
-  # Special job which skips duplicate jobs
-  pre_job:
-    name: Skip Duplicate Jobs Pre Job
-    runs-on: ubuntu-latest
-    # Map a step output to a job output
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - id: skip_check
-        # NOTE: We store action as submodule since ASF doesn't allow directly referencing external
-        # actions
-        uses: ./.github/actions/skip-duplicate-actions # v3.4.0
-        with:
-          github_token: ${{ github.token }}
-
   integration_tests:
     name: Run Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
-    needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip == 'false' || github.ref == 'refs/heads/trunk' }}
 
     strategy:
       matrix:
@@ -52,7 +40,7 @@ jobs:
           fetch-depth: 1
 
       - name: Use Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -62,7 +50,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq gcc libvirt-dev
 
       - name: Cache Python Dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-tests.txt', 'integration/storage/requirements.txt') }}
@@ -71,11 +59,11 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install "tox==3.24.4"
+          pip install -r requirements-ci.txt
 
       - name: Run tox target
         run: |
-          script -e -c "tox -e integration-storage"
+          tox -e integration-storage
         env:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

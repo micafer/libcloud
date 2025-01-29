@@ -29,7 +29,7 @@ __all__ = [
 ]
 
 
-class Provider(object):
+class Provider:
     """
     Defines for each of the supported providers
 
@@ -60,6 +60,7 @@ class Provider(object):
     :cvar S3_CN_NORTH: Amazon S3 CN North (Beijing)
     :cvar S3_EU_WEST: Amazon S3 EU West (Ireland)
     :cvar S3_EU_WEST2: Amazon S3 EU West 2 (London)
+    :cvar S3_EU_WEST3: Amazon S3 EU West 3 (Paris)
     :cvar S3_EU_CENTRAL: Amazon S3 EU Central (Frankfurt)
     :cvar S3_EU_NORTH1: Amazon S3 EU North 1 (Stockholm)
     :cvar S3_SA_EAST: Amazon S3 South America East (Sao Paulo)
@@ -96,6 +97,7 @@ class Provider(object):
     S3_CN_NORTHWEST = "s3_cn_northwest"
     S3_EU_WEST = "s3_eu_west"
     S3_EU_WEST2 = "s3_eu_west_2"
+    S3_EU_WEST3 = "s3_eu_west_3"
     S3_EU_CENTRAL = "s3_eu_central"
     S3_EU_NORTH1 = "s3_eu_north_1"
     S3_SA_EAST = "s3_sa_east"
@@ -107,8 +109,9 @@ class Provider(object):
     S3_RGW_OUTSCALE = "s3_rgw_outscale"
     MINIO = "minio"
     SCALEWAY = "scaleway"
+    OVH = "ovh"
 
-    # Deperecated
+    # Deprecated
     CLOUDFILES_US = "cloudfiles_us"
     CLOUDFILES_UK = "cloudfiles_uk"
     CLOUDFILES_SWIFT = "cloudfiles_swift"
@@ -127,10 +130,10 @@ class ContainerError(LibcloudError):
 
     def __init__(self, value, driver, container_name):
         self.container_name = container_name
-        super(ContainerError, self).__init__(value=value, driver=driver)
+        super().__init__(value=value, driver=driver)
 
     def __str__(self):
-        return "<%s in %s, container=%s, value=%s>" % (
+        return "<{} in {}, container={}, value={}>".format(
             self.error_type,
             repr(self.driver),
             self.container_name,
@@ -143,13 +146,13 @@ class ObjectError(LibcloudError):
 
     def __init__(self, value, driver, object_name):
         self.object_name = object_name
-        super(ObjectError, self).__init__(value=value, driver=driver)
+        super().__init__(value=value, driver=driver)
 
     def __str__(self):
         return self.__repr__()
 
     def __repr__(self):
-        return "<%s in %s, value=%s, object = %s>" % (
+        return "<{} in {}, value={}, object = {}>".format(
             self.error_type,
             repr(self.driver),
             self.value,

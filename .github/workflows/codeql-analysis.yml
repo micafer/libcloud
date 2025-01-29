@@ -8,35 +8,21 @@ on:
 #  schedule:
 #    - cron: '0 3 * * *'
 
+permissions:
+  contents: read  # for actions/checkout to fetch code
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
-  # Special job which skips duplicate jobs
-  pre_job:
-    name: Skip Duplicate Jobs Pre Job
-    runs-on: ubuntu-latest
-    # Map a step output to a job output
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - id: skip_check
-        # NOTE: We store action as submodule since ASF doesn't allow directly referencing external
-        # actions
-        uses: ./.github/actions/skip-duplicate-actions # v3.4.0
-        with:
-          github_token: ${{ github.token }}
-
   analyze:
+    permissions:
+      actions: read  # for github/codeql-action/init to get workflow details
+      security-events: write  # for github/codeql-action/autobuild to send a status report
     name: Analyze
     runs-on: ubuntu-latest
     timeout-minutes: 12
-
-    needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip == 'false' || github.ref == 'refs/heads/trunk' }}
 
     strategy:
       fail-fast: false
@@ -45,15 +31,15 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@master
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
+      uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
 
     - name: Autobuild
-      uses: github/codeql-action/autobuild@v1
+      uses: github/codeql-action/autobuild@v3
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+      uses: github/codeql-action/analyze@v3

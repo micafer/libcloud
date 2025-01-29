@@ -13,24 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import os
+import copy
+import hmac
 import time
 import base64
-import hmac
-
 from hashlib import sha256
-from libcloud.utils.py3 import httplib
-from libcloud.utils.py3 import b
-from libcloud.utils.xml import fixxpath
 
-from libcloud.utils.py3 import ET
-from libcloud.common.types import InvalidCredsError
-from libcloud.common.types import LibcloudError, MalformedResponseError
-from libcloud.common.base import ConnectionUserAndKey, RawResponse
-from libcloud.common.base import CertificateConnection
-from libcloud.common.base import XmlResponse
-from libcloud.common.base import BaseDriver
+from libcloud.http import LibcloudConnection
+from libcloud.utils.py3 import ET, b, httplib, urlparse, urlencode, basestring
+from libcloud.utils.xml import fixxpath
+from libcloud.common.base import (
+    BaseDriver,
+    RawResponse,
+    XmlResponse,
+    ConnectionUserAndKey,
+    CertificateConnection,
+)
+from libcloud.common.types import LibcloudError, InvalidCredsError, MalformedResponseError
+from libcloud.common.azure_arm import AzureAuthJsonResponse, publicEnvironments
 
 # The time format for headers in Azure requests
 AZURE_TIME_FORMAT = "%a, %d %b %Y %H:%M:%S GMT"
@@ -42,7 +43,6 @@ class AzureRedirectException(Exception):
 
 
 class AzureResponse(XmlResponse):
-
     valid_response_codes = [
         httplib.NOT_FOUND,
         httplib.CONFLICT,
@@ -71,20 +71,18 @@ class AzureResponse(XmlResponse):
                 code = body.findtext(fixxpath(xpath="Code"))
                 message = body.findtext(fixxpath(xpath="Message"))
                 message = message.split("\n")[0]
-                error_msg = "%s: %s" % (code, message)
+                error_msg = "{}: {}".format(code, message)
 
         except MalformedResponseError:
             pass
 
         if msg:
-            error_msg = "%s - %s" % (msg, error_msg)
+            error_msg = "{} - {}".format(msg, error_msg)
 
         if self.status in [httplib.UNAUTHORIZED, httplib.FORBIDDEN]:
             raise InvalidCredsError(error_msg)
 
-        raise LibcloudError(
-            "%s Status code: %d." % (error_msg, self.status), driver=self
-        )
+        raise LibcloudError("%s Status code: %d." % (error_msg, self.status), driver=self)
 
     def parse_body(self):
         is_redirect = int(self.status) == httplib.TEMPORARY_REDIRECT
@@ -92,11 +90,123 @@ class AzureResponse(XmlResponse):
         if is_redirect and self.connection.driver.follow_redirects:
             raise AzureRedirectException(self)
         else:
-            return super(AzureResponse, self).parse_body()
+            return super().parse_body()
 
 
 class AzureRawResponse(RawResponse):
     pass
+
+
+class AzureBaseDriver(BaseDriver):
+    name = "Microsoft Azure Service Management API"
+
+
+class AzureActiveDirectoryConnection(ConnectionUserAndKey):
+    """
+    Represents a single connection to Azure using Azure AD for Blob
+    """
+
+    conn_class = LibcloudConnection
+    driver = AzureBaseDriver
+    name = "Azure AD Auth"
+    responseCls = AzureResponse
+    rawResponseCls = AzureRawResponse
+
+    API_VERSION = "2017-11-09"
+
+    def __init__(
+        self,
+        key,
+        secret,
+        secure=True,
+        host=None,
+        port=None,
+        tenant_id=None,
+        identity=None,
+        cloud_environment="default",
+        **kwargs,
+    ):
+        super().__init__(identity, secret, **kwargs)
+        if isinstance(cloud_environment, basestring):
+            cloud_environment = publicEnvironments[cloud_environment]
+        if not isinstance(cloud_environment, dict):
+            raise Exception(
+                "cloud_environment must be one of '%s' or a dict "
+                "containing keys 'resourceManagerEndpointUrl', "
+                "'activeDirectoryEndpointUrl', "
+                "'activeDirectoryResourceId', "
+                "'storageEndpointSuffix'" % ("', '".join(publicEnvironments.keys()))
+            )
+
+        self.login_host = urlparse.urlparse(
+            cloud_environment["activeDirectoryEndpointUrl"]
+        ).hostname
+        self.login_resource = cloud_environment["activeDirectoryResourceId"]
+        self.host = host
+        self.identity = identity
+        self.tenant_id = tenant_id
+        self.storage_account_id = key
+
+    def add_default_headers(self, headers):
+        headers["x-ms-date"] = time.strftime(AZURE_TIME_FORMAT, time.gmtime())
+        headers["x-ms-version"] = self.API_VERSION
+        headers["Content-Type"] = "application/xml"
+        headers["Authorization"] = "Bearer %s" % self.access_token
+        return headers
+
+    def get_client_credentials(self):
+        """
+        Log in and get bearer token used to authorize API requests.
+        """
+        conn = self.conn_class(self.login_host, 443, timeout=self.timeout)
+        conn.connect()
+        params = urlencode(
+            {
+                "grant_type": "client_credentials",
+                "client_id": self.user_id,
+                "client_secret": self.key,
+                "resource": "https://storage.azure.com/",
+            }
+        )
+        headers = {"Content-type": "application/x-www-form-urlencoded"}
+        conn.request("POST", "/%s/oauth2/token" % self.tenant_id, params, headers)
+        js = AzureAuthJsonResponse(conn.getresponse(), conn)
+        self.access_token = js.object["access_token"]
+        self.expires_on = js.object["expires_on"]
+
+    def connect(self, **kwargs):
+        self.get_client_credentials()
+        return super().connect(**kwargs)
+
+    def request(
+        self,
+        action,
+        params=None,
+        data=None,
+        headers=None,
+        method="GET",
+        raw=False,
+        stream=False,
+        json=None,
+        retry_failed=None,
+        *kwargs,
+    ):
+        # Log in again if the token has expired or is going to expire soon
+        # (next 5 minutes).
+        if (time.time() + 300) >= int(self.expires_on):
+            self.get_client_credentials()
+
+        return super().request(
+            action,
+            params=params,
+            data=data,
+            headers=headers,
+            method=method,
+            raw=raw,
+            stream=stream,
+            json=json,
+            retry_failed=retry_failed,
+        )
 
 
 class AzureConnection(ConnectionUserAndKey):
@@ -134,9 +244,7 @@ class AzureConnection(ConnectionUserAndKey):
 
         return params, headers
 
-    def _get_azure_auth_signature(
-        self, method, headers, params, account, secret_key, path="/"
-    ):
+    def _get_azure_auth_signature(self, method, headers, params, account, secret_key, path="/"):
         """
         Signature = Base64( HMAC-SHA1( YourSecretAccessKeyID,
                             UTF-8-Encoding-Of( StringToSign ) ) ) );
@@ -181,10 +289,10 @@ class AzureConnection(ConnectionUserAndKey):
         xms_header_values.sort()
 
         for header, value in xms_header_values:
-            values_to_sign.append("%s:%s" % (header, value))
+            values_to_sign.append("{}:{}".format(header, value))
 
         # Add the canonicalized path
-        values_to_sign.append("/%s%s" % (account, path))
+        values_to_sign.append("/{}{}".format(account, path))
 
         # URL query parameters (sorted and lower case)
         for key, value in params.items():
@@ -193,15 +301,13 @@ class AzureConnection(ConnectionUserAndKey):
         param_list.sort()
 
         for key, value in param_list:
-            values_to_sign.append("%s:%s" % (key, value))
+            values_to_sign.append("{}:{}".format(key, value))
 
         string_to_sign = b("\n".join(values_to_sign))
         secret_key = b(secret_key)
-        b64_hmac = base64.b64encode(
-            hmac.new(secret_key, string_to_sign, digestmod=sha256).digest()
-        )
+        b64_hmac = base64.b64encode(hmac.new(secret_key, string_to_sign, digestmod=sha256).digest())
 
-        return "SharedKey %s:%s" % (self.user_id, b64_hmac.decode("utf-8"))
+        return "SharedKey {}:{}".format(self.user_id, b64_hmac.decode("utf-8"))
 
     def _format_special_header_values(self, headers, method):
         is_change = method not in ("GET", "HEAD")
@@ -237,10 +343,6 @@ class AzureConnection(ConnectionUserAndKey):
         return special_header_values
 
 
-class AzureBaseDriver(BaseDriver):
-    name = "Microsoft Azure Service Management API"
-
-
 class AzureServiceManagementConnection(CertificateConnection):
     # This needs the following approach -
     # 1. Make request using LibcloudHTTPSConnection which is a overloaded
@@ -272,9 +374,7 @@ class AzureServiceManagementConnection(CertificateConnection):
         :type   key_file: ``str``
         """
 
-        super(AzureServiceManagementConnection, self).__init__(
-            key_file, *args, **kwargs
-        )
+        super().__init__(key_file, *args, **kwargs)
 
         self.subscription_id = subscription_id
 

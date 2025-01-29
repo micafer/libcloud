@@ -20,8 +20,8 @@ libcloud provides a unified interface to the cloud computing resources.
 """
 
 import os
-import codecs
 import atexit
+import codecs
 
 from libcloud.base import DriverType  # NOQA
 from libcloud.base import DriverTypeFactoryMap  # NOQA
@@ -39,7 +39,7 @@ except ImportError:
 
 __all__ = ["__version__", "enable_debug"]
 
-__version__ = "3.5.1-dev"
+__version__ = "3.9.0"
 
 
 def enable_debug(fo):
@@ -63,6 +63,19 @@ def enable_debug(fo):
             pass
 
     atexit.register(close_file, fo)
+
+
+def reset_debug():
+    """
+    Reset debugging functionality (if set).
+
+    NOTE: This function is only meant to be used in the tests.
+    """
+    from libcloud.common.base import Connection, LibcloudConnection
+    from libcloud.utils.loggingconnection import LoggingConnection
+
+    LoggingConnection.log = None
+    Connection.conn_class = LibcloudConnection
 
 
 def _init_once():

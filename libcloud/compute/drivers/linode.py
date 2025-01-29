@@ -29,38 +29,43 @@ Linode(R) is a registered trademark of Linode, LLC.
 
 import os
 import re
+import binascii
+import itertools
+from copy import copy
+from datetime import datetime
+
+from libcloud.utils.py3 import httplib
+from libcloud.compute.base import (
+    Node,
+    KeyPair,
+    NodeSize,
+    NodeImage,
+    NodeDriver,
+    NodeLocation,
+    StorageVolume,
+    NodeAuthSSHKey,
+    NodeAuthPassword,
+)
+from libcloud.common.linode import (
+    API_ROOT,
+    LINODE_PLAN_IDS,
+    DEFAULT_API_VERSION,
+    LINODE_DISK_FILESYSTEMS,
+    LINODE_DISK_FILESYSTEMS_V4,
+    LinodeDisk,
+    LinodeException,
+    LinodeIPAddress,
+    LinodeConnection,
+    LinodeExceptionV4,
+    LinodeConnectionV4,
+)
+from libcloud.compute.types import Provider, NodeState, StorageVolumeState
+from libcloud.utils.networking import is_private_subnet
 
 try:
     import simplejson as json
 except ImportError:
     import json
-
-import itertools
-import binascii
-from datetime import datetime
-
-from copy import copy
-
-from libcloud.utils.py3 import PY3, httplib
-from libcloud.utils.networking import is_private_subnet
-
-from libcloud.common.linode import (
-    API_ROOT,
-    LinodeException,
-    LinodeConnection,
-    LinodeConnectionV4,
-    LinodeDisk,
-    LinodeIPAddress,
-    LinodeExceptionV4,
-    LINODE_PLAN_IDS,
-    LINODE_DISK_FILESYSTEMS,
-    LINODE_DISK_FILESYSTEMS_V4,
-    DEFAULT_API_VERSION,
-)
-from libcloud.compute.types import Provider, NodeState, StorageVolumeState
-from libcloud.compute.base import NodeDriver, NodeSize, Node, NodeLocation
-from libcloud.compute.base import NodeAuthPassword, NodeAuthSSHKey
-from libcloud.compute.base import NodeImage, StorageVolume
 
 
 class LinodeNodeDriver(NodeDriver):
@@ -88,7 +93,7 @@ class LinodeNodeDriver(NodeDriver):
                 raise NotImplementedError(
                     "No Linode driver found for API version: %s" % (api_version)
                 )
-        return super(LinodeNodeDriver, cls).__new__(cls)
+        return super().__new__(cls)
 
 
 class LinodeNodeDriverV3(LinodeNodeDriver):
@@ -399,7 +404,7 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
         # are limited to 48 chars
         label = {
             "lconfig": "[%s] Configuration Profile" % linode["id"],
-            "lroot": "[%s] %s Disk Image" % (linode["id"], image.name),
+            "lroot": "[{}] {} Disk Image".format(linode["id"], image.name),
             "lswap": "[%s] Swap Space" % linode["id"],
         }
 
@@ -441,7 +446,7 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
         linode["swapimage"] = data["DiskID"]
 
         # Step 4: linode.config.create for main profile
-        disks = "%s,%s,,,,,,," % (linode["rootimage"], linode["swapimage"])
+        disks = "{},{},,,,,,,".format(linode["rootimage"], linode["swapimage"])
         params = {
             "api_action": "linode.config.create",
             "LinodeID": linode["id"],
@@ -614,7 +619,7 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
     def destroy_volume(self, volume):
         """
         Destroys disk volume for the Linode. Linode id is to be provided as
-        extra["LinodeId"] whithin :class:`StorageVolume`. It can be retrieved
+        extra["LinodeId"] within :class:`StorageVolume`. It can be retrieved
         by :meth:`libcloud.compute.drivers.linode.LinodeNodeDriver\
                  .ex_list_volumes`.
 
@@ -726,7 +731,7 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
 
     def _to_volumes(self, objs):
         """
-        Covert returned JSON volumes into StorageVolume instances
+        Convert returned JSON volumes into StorageVolume instances
 
         :keyword    objs: ``list`` of JSON dictionaries representing the
                          StorageVolumes
@@ -774,12 +779,7 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
         ip_answers = []
         args = [iter(batch)] * 25
 
-        if PY3:
-            izip_longest = itertools.zip_longest  # pylint: disable=no-member
-        else:
-            izip_longest = getattr(itertools, "izip_longest", _izip_longest)
-
-        for twenty_five in izip_longest(*args):
+        for twenty_five in itertools.zip_longest(*args):
             twenty_five = [q for q in twenty_five if q]
             params = {
                 "api_action": "batch",
@@ -794,17 +794,12 @@ class LinodeNodeDriverV3(LinodeNodeDriver):
         for ip_list in ip_answers:
             for ip in ip_list:
                 lid = ip["LINODEID"]
-                which = (
-                    nodes[lid].public_ips
-                    if ip["ISPUBLIC"] == 1
-                    else nodes[lid].private_ips
-                )
+                which = nodes[lid].public_ips if ip["ISPUBLIC"] == 1 else nodes[lid].private_ips
                 which.append(ip["IPADDRESS"])
         return list(nodes.values())
 
 
 class LinodeNodeDriverV4(LinodeNodeDriver):
-
     connectionCls = LinodeConnectionV4
     _linode_disk_filesystems = LINODE_DISK_FILESYSTEMS_V4
 
@@ -867,6 +862,33 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         data = self._paginated_request("/v4/images", "data")
         return [self._to_image(obj) for obj in data]
 
+    def create_key_pair(self, name, public_key=""):
+        """
+        Creates an SSH keypair
+
+        :param name: The name to be given to the keypair (required).\
+        :type name: `str`
+
+        :keyword public_key: Contents of the public key the the SSH key pair
+        :type public_key: `str`
+
+        :rtype: :class: `KeyPair`
+        """
+        attr = {"label": name, "ssh_key": public_key}
+        response = self.connection.request(
+            "/v4/profile/sshkeys", data=json.dumps(attr), method="POST"
+        ).object
+        return self._to_key_pair(response)
+
+    def list_key_pairs(self):
+        """
+        Provide a list of all the SSH keypairs in your account.
+
+        :rtype: ``list`` of :class: `KeyPair`
+        """
+        data = self._paginated_request("/v4/profile/sshkeys", "data")
+        return [self._to_key_pair(obj) for obj in data]
+
     def list_locations(self):
         """
         Lists the Regions available for Linode services
@@ -887,9 +909,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         if not isinstance(node, Node):
             raise LinodeExceptionV4("Invalid node instance")
 
-        response = self.connection.request(
-            "/v4/linode/instances/%s/boot" % node.id, method="POST"
-        )
+        response = self.connection.request("/v4/linode/instances/%s/boot" % node.id, method="POST")
         return response.status == httplib.OK
 
     def ex_start_node(self, node):
@@ -931,9 +951,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         if not isinstance(node, Node):
             raise LinodeExceptionV4("Invalid node instance")
 
-        response = self.connection.request(
-            "/v4/linode/instances/%s" % node.id, method="DELETE"
-        )
+        response = self.connection.request("/v4/linode/instances/%s" % node.id, method="DELETE")
         return response.status == httplib.OK
 
     def reboot_node(self, node):
@@ -955,15 +973,28 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
     def create_node(
         self,
         location,
-        size,
-        image=None,
-        name=None,
+        # Previously, the following 3 parameters did not match the rest of the libcloud
+        # codebase drivers. They should be in the same order as other compute drivers.
+        # Previously, it looked like this:
+        #         size,
+        #         image=None,
+        #         name=None,
+        #
+        # Comments welcome on how backwards compatibility (if any) should work here.
+        # Since it was not compatible with other drivers, it is not clear to me if this
+        # would break anyone's codebase if they were not using any other libcloud drivers
+        # to other cloud providers in the first place. If they were not, that seems to
+        # kind of defeat the purpose of using libcloud.
+        name,  # Can be None
+        size,  # Can be None
+        image,  # Can be None
         root_pass=None,
         ex_authorized_keys=None,
         ex_authorized_users=None,
         ex_tags=None,
         ex_backups_enabled=False,
         ex_private_ip=False,
+        ex_userdata=None,
     ):
         """Creates a Linode Instance.
         In order for this request to complete successfully,
@@ -1007,6 +1038,12 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         :keyword ex_private_ip: whether or not to request a private IP
         :type    ex_private_ip: ``bool``
 
+        :keyword ex_userdata: add cloud-config compatible userdata to be
+        processed by cloud-init inside the Linode instance. NOTE: the
+        contents of this string must be base64 encoded before passing
+        it to this function.
+        :type    ex_userdata: ``str``
+
         :return: Node representing the newly-created node
         :rtype: :class:`Node`
         """
@@ -1024,11 +1061,16 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
             "backups_enabled": ex_backups_enabled,
         }
 
+        if ex_userdata:
+            attr["metadata"] = {
+                "user_data": binascii.b2a_base64(bytes(ex_userdata.encode("utf-8")))
+                .decode("ascii")
+                .strip()
+            }
+
         if image is not None:
             if root_pass is None:
-                raise LinodeExceptionV4(
-                    "root password required " "when providing an image"
-                )
+                raise LinodeExceptionV4("root password required " "when providing an image")
             attr["image"] = image.id
             attr["root_pass"] = root_pass
 
@@ -1074,9 +1116,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         if not isinstance(node, Node):
             raise LinodeExceptionV4("Invalid node instance")
 
-        data = self._paginated_request(
-            "/v4/linode/instances/%s/disks" % node.id, "data"
-        )
+        data = self._paginated_request("/v4/linode/instances/%s/disks" % node.id, "data")
 
         return [self._to_disk(obj) for obj in data]
 
@@ -1149,9 +1189,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
                 raise LinodeExceptionV4("Invalid image instance")
             # when an image is set, root pass must be set as well
             if ex_root_pass is None:
-                raise LinodeExceptionV4(
-                    "root_pass is required when " "deploying an image"
-                )
+                raise LinodeExceptionV4("root_pass is required when " "deploying an image")
             attr["image"] = image.id
             attr["root_pass"] = ex_root_pass
 
@@ -1187,12 +1225,10 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
             raise LinodeExceptionV4("Invalid disk instance")
 
         if node.state != self.LINODE_STATES["stopped"]:
-            raise LinodeExceptionV4(
-                "Node needs to be stopped" " before disk is destroyed"
-            )
+            raise LinodeExceptionV4("Node needs to be stopped" " before disk is destroyed")
 
         response = self.connection.request(
-            "/v4/linode/instances/%s/disks/%s" % (node.id, disk.id), method="DELETE"
+            "/v4/linode/instances/{}/disks/{}".format(node.id, disk.id), method="DELETE"
         )
         return response.status == httplib.OK
 
@@ -1270,7 +1306,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         :param volume: Volume to be attached (required)
         :type volume: :class:`StorageVolume`
 
-        :keyword persist_across_boots: Wether volume should be \
+        :keyword persist_across_boots: Whether volume should be \
         attached to node across boots
         :type persist_across_boots: `bool`
 
@@ -1309,9 +1345,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         if volume.extra["linode_id"] is None:
             raise LinodeExceptionV4("Volume is already detached")
 
-        response = self.connection.request(
-            "/v4/volumes/%s/detach" % volume.id, method="POST"
-        )
+        response = self.connection.request("/v4/volumes/%s/detach" % volume.id, method="POST")
         return response.status == httplib.OK
 
     def destroy_volume(self, volume):
@@ -1326,12 +1360,8 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
             raise LinodeExceptionV4("Invalid volume instance")
 
         if volume.extra["linode_id"] is not None:
-            raise LinodeExceptionV4(
-                "Volume must be detached" " before it can be deleted."
-            )
-        response = self.connection.request(
-            "/v4/volumes/%s" % volume.id, method="DELETE"
-        )
+            raise LinodeExceptionV4("Volume must be detached" " before it can be deleted.")
+        response = self.connection.request("/v4/volumes/%s" % volume.id, method="DELETE")
         return response.status == httplib.OK
 
     def ex_resize_volume(self, volume, size):
@@ -1392,6 +1422,18 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         """
         response = self.connection.request("/v4/volumes/%s" % volume_id).object
         return self._to_volume(response)
+
+    def get_image(self, image):
+        """
+        Lookup a Linode image
+
+        :param image: The name to image to be looked up (required).\
+        :type name: `str`
+
+        :rtype: :class: `NodeImage`
+        """
+        response = self.connection.request("/v4/images/%s" % image, method="GET")
+        return self._to_image(response.object)
 
     def create_image(self, disk, name=None, description=None):
         """Creates a private image from a LinodeDisk.
@@ -1458,9 +1500,7 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         if not isinstance(node, Node):
             raise LinodeExceptionV4("Invalid node instance")
 
-        response = self.connection.request(
-            "/v4/linode/instances/%s/ips" % node.id
-        ).object
+        response = self.connection.request("/v4/linode/instances/%s/ips" % node.id).object
         return self._to_addresses(response)
 
     def ex_allocate_private_address(self, node, address_type="ipv4"):
@@ -1579,6 +1619,18 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
         ).object
 
         return self._to_node(response)
+
+    def _to_key_pair(self, data):
+        extra = {"id": data["id"]}
+
+        return KeyPair(
+            name=data["label"],
+            fingerprint=None,
+            public_key=data["ssh_key"],
+            private_key=None,
+            driver=self,
+            extra=extra,
+        )
 
     def _to_node(self, data):
         extra = {
@@ -1740,23 +1792,3 @@ class LinodeNodeDriverV4(LinodeNodeDriver):
             data = list(ret.get(obj, []))
             objects.extend(data)
         return objects
-
-
-def _izip_longest(*args, **kwds):
-    """Taken from Python docs
-
-    http://docs.python.org/library/itertools.html#itertools.izip
-    """
-
-    fillvalue = kwds.get("fillvalue")
-
-    def sentinel(counter=([fillvalue] * (len(args) - 1)).pop):
-        yield counter()  # yields the fillvalue, or raises IndexError
-
-    fillers = itertools.repeat(fillvalue)
-    iters = [itertools.chain(it, sentinel(), fillers) for it in args]
-    try:
-        for tup in itertools.izip(*iters):  # pylint: disable=no-member
-            yield tup
-    except IndexError:
-        pass

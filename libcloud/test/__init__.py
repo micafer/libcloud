@@ -13,25 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
+import os
 import random
+import unittest
+
 import requests
-from libcloud.common.base import Response
+import requests_mock
+
 from libcloud.http import LibcloudConnection
-from libcloud.utils.py3 import PY2
+from libcloud.utils.py3 import PY2, httplib, parse_qs, urlparse, urlquote, parse_qsl
+from libcloud.common.base import Response
 
 if PY2:
     from StringIO import StringIO
 else:
     from io import StringIO
-
-import requests_mock
-
-from libcloud.utils.py3 import httplib
-from libcloud.utils.py3 import urlparse
-from libcloud.utils.py3 import parse_qs
-from libcloud.utils.py3 import parse_qsl
-from libcloud.utils.py3 import urlquote
 
 
 XML_HEADERS = {"content-type": "application/xml"}
@@ -41,7 +37,7 @@ class LibcloudTestCase(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         self._visited_urls = []
         self._executed_mock_methods = []
-        super(LibcloudTestCase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def setUp(self):
         self._visited_urls = []
@@ -62,7 +58,7 @@ class LibcloudTestCase(unittest.TestCase):
         )
 
 
-class multipleresponse(object):
+class multipleresponse:
     """
     A decorator that allows MockHttp objects to return multi responses
     """
@@ -108,11 +104,11 @@ class MockHttp(LibcloudConnection):
     proxy_url = None
 
     def __init__(self, *args, **kwargs):
-        # Load assertion methods into the class, incase people want to assert
+        # Load assertion methods into the class, in case people want to assert
         # within a response
         if isinstance(self, unittest.TestCase):
             unittest.TestCase.__init__(self, "__init__")
-        super(MockHttp, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _get_request(self, method, url, body=None, headers=None):
         # Find a method we can use for this request
@@ -133,9 +129,7 @@ class MockHttp(LibcloudConnection):
 
     def request(self, method, url, body=None, headers=None, raw=False, stream=False):
         headers = self._normalize_headers(headers=headers)
-        r_status, r_body, r_headers, r_reason = self._get_request(
-            method, url, body, headers
-        )
+        r_status, r_body, r_headers, r_reason = self._get_request(method, url, body, headers)
         if r_body is None:
             r_body = ""
         # this is to catch any special chars e.g. ~ in the request. URL
@@ -151,7 +145,7 @@ class MockHttp(LibcloudConnection):
                 status_code=r_status,
             )
             try:
-                super(MockHttp, self).request(
+                super().request(
                     method=method,
                     url=url,
                     body=body,
@@ -160,17 +154,11 @@ class MockHttp(LibcloudConnection):
                     stream=stream,
                 )
             except requests_mock.exceptions.NoMockAddress as nma:
-                raise AttributeError(
-                    "Failed to mock out URL {0} - {1}".format(url, nma.request.url)
-                )
+                raise AttributeError("Failed to mock out URL {} - {}".format(url, nma.request.url))
 
-    def prepared_request(
-        self, method, url, body=None, headers=None, raw=False, stream=False
-    ):
+    def prepared_request(self, method, url, body=None, headers=None, raw=False, stream=False):
         headers = self._normalize_headers(headers=headers)
-        r_status, r_body, r_headers, r_reason = self._get_request(
-            method, url, body, headers
-        )
+        r_status, r_body, r_headers, r_reason = self._get_request(method, url, body, headers)
 
         with requests_mock.mock() as m:
             m.register_uri(
@@ -181,7 +169,7 @@ class MockHttp(LibcloudConnection):
                 headers=r_headers,
                 status_code=r_status,
             )
-            super(MockHttp, self).prepared_request(
+            super().prepared_request(
                 method=method,
                 url=url,
                 body=body,
@@ -205,7 +193,7 @@ class MockHttp(LibcloudConnection):
     def _example_fail(self, method, url, body, headers):
         return (
             httplib.FORBIDDEN,
-            "Oh Noes!",
+            "Oh No!",
             {"X-Foo": "fail"},
             httplib.responses[httplib.FORBIDDEN],
         )
@@ -213,18 +201,15 @@ class MockHttp(LibcloudConnection):
     def _get_method_name(self, type, use_param, qs, path):
         path = path.split("?")[0]
         meth_name = (
-            path.replace("/", "_")
-            .replace(".", "_")
-            .replace("-", "_")
-            .replace("~", "%7E")
+            path.replace("/", "_").replace(".", "_").replace("-", "_").replace("~", "%7E")
         )  # Python 3.7 no longer quotes ~
 
         if type:
-            meth_name = "%s_%s" % (meth_name, self.type)
+            meth_name = "{}_{}".format(meth_name, type)
 
         if use_param and use_param in qs:
             param = qs[use_param][0].replace(".", "_").replace("-", "_")
-            meth_name = "%s_%s" % (meth_name, param)
+            meth_name = "{}_{}".format(meth_name, param)
 
         if meth_name == "":
             meth_name = "root"
@@ -260,7 +245,7 @@ class MockHttp(LibcloudConnection):
                 assert params[key] == value
 
 
-class MockConnection(object):
+class MockConnection:
     def __init__(self, action):
         self.action = action
 
@@ -284,6 +269,21 @@ def generate_random_data(size):
         data += value
         current_size += value_size
     return data
+
+
+def no_network():
+    """Return true if the NO_NETWORK environment variable is set.
+    Can be used to skip relevant tests.
+    """
+    return "NO_NETWORK" in os.environ
+
+
+def no_internet():
+    """Return true if the NO_INTERNET or the NO_NETWORK environment variable
+    is set.
+    Can be used to skip relevant tests.
+    """
+    return "NO_INTERNET" in os.environ or no_network()
 
 
 if __name__ == "__main__":

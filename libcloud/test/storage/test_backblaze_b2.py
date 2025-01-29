@@ -15,18 +15,15 @@
 
 import os
 import sys
-import tempfile
-
-import mock
 import json
+import tempfile
+from unittest import mock
 
-from libcloud.storage.drivers.backblaze_b2 import BackblazeB2StorageDriver
-from libcloud.utils.py3 import httplib
-from libcloud.utils.py3 import b
+from libcloud.test import MockHttp, unittest
+from libcloud.utils.py3 import b, httplib
 from libcloud.utils.files import exhaust_iterator
-from libcloud.test import unittest
-from libcloud.test import MockHttp
 from libcloud.test.file_fixtures import StorageFileFixtures
+from libcloud.storage.drivers.backblaze_b2 import BackblazeB2StorageDriver
 
 
 class MockAuthConn(mock.Mock):
@@ -126,6 +123,19 @@ class BackblazeB2StorageDriverTestCase(unittest.TestCase):
         self.assertEqual(obj.size, 24)
         self.assertEqual(obj.extra["fileId"], "abcde")
 
+    def test_upload_object_with_metadata(self):
+        file_path = os.path.abspath(__file__)
+        container = self.driver.list_containers()[0]
+        obj = self.driver.upload_object(
+            file_path=file_path,
+            container=container,
+            object_name="test0007.txt",
+            extra={"meta_data": {"foo": "bar", "baz": 1}},
+        )
+        self.assertEqual(obj.name, "test0007.txt")
+        self.assertEqual(obj.size, 24)
+        self.assertEqual(obj.extra["fileId"], "abcde")
+
     def test_delete_object(self):
         container = self.driver.list_containers()[0]
         obj = self.driver.list_container_objects(container=container)[0]
@@ -159,9 +169,7 @@ class BackblazeB2StorageDriverTestCase(unittest.TestCase):
         container = self.driver.list_containers()[0]
         container_id = container.extra["id"]
         url = self.driver.ex_get_upload_url(container_id=container_id)
-        self.assertEqual(
-            url, "https://podxxx.backblaze.com/b2api/v1/b2_upload_file/abcd/defg"
-        )
+        self.assertEqual(url, "https://podxxx.backblaze.com/b2api/v1/b2_upload_file/abcd/defg")
 
 
 class BackblazeB2MockHttp(MockHttp):

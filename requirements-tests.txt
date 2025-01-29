@@ -1,16 +1,16 @@
-pep8==1.7.1
-flake8==4.0.1
-astroid==2.8.4
-pylint==2.11.1
-mock==4.0.3
-codecov==2.1.12
-coverage==4.5.4
-requests>=2.27.1
-requests_mock==1.9.3
-pytest==7.0.1
-pytest-xdist==2.5.0
-pytest-benchmark[histogram]==3.4.1
-cryptography==36.0.1
+coverage[toml]==7.2.7; python_version >= '3.8'
+requests>=2.31.0
+requests_mock==1.11.0
+pytest==8.1.1
+pytest-xdist==3.5.0
+pytest-timeout==2.2.0
+pytest-benchmark[histogram]==4.0.0
+cryptography==42.0.5
+
 # NOTE: Only needed by nttcis loadbalancer driver
-pyopenssl==21.0.0
-more-itertools==8.11.0
+pyopenssl==24.1.0
+
+# Required by subset of tests
+fasteners
+paramiko==3.4.0; platform_python_implementation != 'PyPy'
+libvirt-python==10.2.0

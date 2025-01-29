@@ -17,6 +17,15 @@
 #  under the License.
 
 # Verify library installs without any dependencies when using built wheel
+set -e
+
+function cleanup() {
+    rm -f dist/apache*libcloud*.*
+}
+
+cleanup
+
+trap cleanup EXIT
 
 echo "Running dist wheel install checks"
 python --version
@@ -26,11 +35,11 @@ python --version
 pip show requests && exit 1
 pip show typing && exit 1
 pip show enum34 && exit 1
-pip show apache-libcloud
+pip show apache-libcloud && exit 1
 rm -rf dist/apache_libcloud-*.whl
 
-pip install wheel
-python setup.py bdist_wheel
+pip install build
+python -m build
 pip install dist/apache_libcloud-*.whl
 
 # Verify all dependencies were installed

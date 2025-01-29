@@ -30,10 +30,10 @@ datetime.datetime(2007, 1, 25, 12, 0, tzinfo=<iso8601.iso8601.Utc ...>)
 
 # Taken from pyiso8601 which is licensed under the MIT license.
 
-from datetime import datetime, timedelta, tzinfo
 import re
+from datetime import tzinfo, datetime, timedelta
 
-__all__ = ["parse_date", "ParseError"]
+__all__ = ["parse_date", "parse_date_allow_empty", "ParseError"]
 
 # Adapted from http://delete.me.uk/2005/03/iso8601.html
 ISO8601_REGEX = re.compile(
@@ -41,9 +41,7 @@ ISO8601_REGEX = re.compile(
     r"((?P<separator>.)(?P<hour>[0-9]{2}):(?P<minute>[0-9]{2})(:(?P<second>[0-9]{2})(\.(?P<fraction>[0-9]+))?)?"  # NOQA
     r"(?P<timezone>Z|(([-+])([0-9]{2}):([0-9]{2})))?)?)?)?"
 )
-TIMEZONE_REGEX = re.compile(
-    "(?P<prefix>[+-])(?P<hours>[0-9]{2}).(?P<minutes>[0-9]{2})"
-)  # NOQA
+TIMEZONE_REGEX = re.compile("(?P<prefix>[+-])(?P<hours>[0-9]{2}).(?P<minutes>[0-9]{2})")  # NOQA
 
 
 class ParseError(Exception):
@@ -108,7 +106,7 @@ def parse_timezone(tzstring, default_timezone=UTC):
     return FixedOffset(hours, minutes, tzstring)
 
 
-def parse_date(datestring, default_timezone=UTC):
+def parse_date(datestring, default_timezone=UTC, allow_empty=False):
     """Parses ISO 8601 dates into datetime objects
 
     The timezone is parsed from the date string. However it is quite common to
@@ -117,6 +115,9 @@ def parse_date(datestring, default_timezone=UTC):
     default.
     """
     if not datestring:
+        if allow_empty:
+            return None
+
         raise ValueError("datestring must be valid date string and not None")
 
     m = ISO8601_REGEX.match(datestring)
@@ -138,3 +139,12 @@ def parse_date(datestring, default_timezone=UTC):
         int(groups["fraction"]),
         tz,
     )
+
+
+def parse_date_allow_empty(datestring, default_timezone=UTC):
+    """
+    Parses ISO 8601 dates into datetime objects, but allow empty values.
+
+    In case empty value is found, None is returned.
+    """
+    return parse_date(datestring=datestring, default_timezone=default_timezone, allow_empty=True)

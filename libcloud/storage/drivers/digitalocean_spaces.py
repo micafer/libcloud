@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from libcloud.common.types import LibcloudError
 from libcloud.common.aws import SignedAWSConnection
-from libcloud.storage.drivers.s3 import BaseS3Connection, S3Connection
-from libcloud.storage.drivers.s3 import BaseS3StorageDriver
+from libcloud.common.types import LibcloudError
+from libcloud.storage.drivers.s3 import S3Connection, BaseS3Connection, BaseS3StorageDriver
 
 __all__ = ["DigitalOceanSpacesStorageDriver"]
 
@@ -50,8 +49,7 @@ class DOSpacesConnectionAWS4(SignedAWSConnection, BaseS3Connection):
         backoff=None,
         **kwargs,
     ):
-
-        super(DOSpacesConnectionAWS4, self).__init__(
+        super().__init__(
             user_id,
             key,
             secure,
@@ -83,8 +81,7 @@ class DOSpacesConnectionAWS2(S3Connection):
         backoff=None,
         **kwargs,
     ):
-
-        super(DOSpacesConnectionAWS2, self).__init__(
+        super().__init__(
             user_id,
             key,
             secure,
@@ -116,7 +113,6 @@ class DigitalOceanSpacesStorageDriver(BaseS3StorageDriver):
         region=DO_SPACES_DEFAULT_REGION,
         **kwargs,
     ):
-
         if region not in DO_SPACES_HOSTS_BY_REGION:
             raise LibcloudError("Unknown region (%s)" % (region), driver=self)
 
@@ -124,9 +120,7 @@ class DigitalOceanSpacesStorageDriver(BaseS3StorageDriver):
         self.name = "DigitalOcean Spaces (%s)" % (region)
 
         self.region_name = region
-        self.signature_version = str(
-            kwargs.pop("signature_version", DEFAULT_SIGNATURE_VERSION)
-        )
+        self.signature_version = str(kwargs.pop("signature_version", DEFAULT_SIGNATURE_VERSION))
 
         if self.signature_version == "2":
             self.connectionCls = DOSpacesConnectionAWS2
@@ -136,9 +130,7 @@ class DigitalOceanSpacesStorageDriver(BaseS3StorageDriver):
             raise ValueError("Invalid signature_version: %s" % (self.signature_version))
         self.connectionCls.host = host
 
-        super(DigitalOceanSpacesStorageDriver, self).__init__(
-            key, secret, secure, host, port, api_version, region, **kwargs
-        )
+        super().__init__(key, secret, secure, host, port, api_version, region, **kwargs)
 
     def _ex_connection_class_kwargs(self):
         kwargs = {}

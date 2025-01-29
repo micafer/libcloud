@@ -13,43 +13,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import with_statement
 
 import os
 import sys
+import json
 import tempfile
 from io import BytesIO
 
-from libcloud.utils.py3 import httplib
-from libcloud.utils.py3 import urlparse
-from libcloud.utils.py3 import parse_qs
-from libcloud.utils.py3 import b
-from libcloud.utils.py3 import basestring
-
-from libcloud.common.types import InvalidCredsError
-from libcloud.common.types import LibcloudError
-from libcloud.storage.base import Container, Object
-from libcloud.storage.types import ContainerDoesNotExistError
-from libcloud.storage.types import ContainerIsNotEmptyError
-from libcloud.storage.types import ContainerAlreadyExistsError
-from libcloud.storage.types import InvalidContainerNameError
-from libcloud.storage.types import ObjectDoesNotExistError
-from libcloud.storage.types import ObjectHashMismatchError
-from libcloud.storage.drivers.azure_blobs import AzureBlobsStorageDriver
-from libcloud.storage.drivers.azure_blobs import AZURE_UPLOAD_CHUNK_SIZE
-
-from libcloud.test import unittest
 from libcloud.test import generate_random_data  # pylint: disable-msg=E0611
-from libcloud.test.file_fixtures import StorageFileFixtures  # pylint: disable-msg=E0611
-from libcloud.test.secrets import STORAGE_AZURE_BLOBS_PARAMS
-from libcloud.test.secrets import STORAGE_AZURITE_BLOBS_PARAMS
+from libcloud.test import unittest
+from libcloud.utils.py3 import b, httplib, parse_qs, urlparse, basestring
+from libcloud.common.types import LibcloudError, InvalidCredsError
+from libcloud.storage.base import Object, Container
+from libcloud.test.secrets import STORAGE_AZURE_BLOBS_PARAMS, STORAGE_AZURITE_BLOBS_PARAMS
+from libcloud.storage.types import (
+    ObjectDoesNotExistError,
+    ObjectHashMismatchError,
+    ContainerIsNotEmptyError,
+    InvalidContainerNameError,
+    ContainerDoesNotExistError,
+    ContainerAlreadyExistsError,
+)
 from libcloud.test.storage.base import BaseRangeDownloadMockHttp
+from libcloud.test.file_fixtures import StorageFileFixtures  # pylint: disable-msg=E0611
+from libcloud.storage.drivers.azure_blobs import (
+    AZURE_UPLOAD_CHUNK_SIZE,
+    AzureBlobsStorageDriver,
+    AzureBlobsActiveDirectoryConnection,
+)
 
 
 class AzureBlobsMockHttp(BaseRangeDownloadMockHttp, unittest.TestCase):
-
     fixtures = StorageFileFixtures("azure_blobs")
     base_headers = {}
+
+    # Note: using this method to get the oauth key for azure ad authentication
+    def __getattr__(self, n):
+        def fn(method, url, body, headers):
+            fixture = self.fixtures.load(n + ".json")
+
+            if method in ("POST", "PUT"):
+                try:
+                    body = json.loads(body)
+                    fixture_tmp = json.loads(fixture)
+                    fixture_tmp = self._update(fixture_tmp, body)
+                    fixture = json.dumps(fixture_tmp)
+                except ValueError:
+                    pass
+
+            return (httplib.OK, fixture, headers, httplib.responses[httplib.OK])
+
+        return fn
 
     def _UNAUTHORIZED(self, method, url, body, headers):
         return (
@@ -284,9 +298,7 @@ class AzureBlobsMockHttp(BaseRangeDownloadMockHttp, unittest.TestCase):
 
             return (httplib.OK, body, headers, httplib.responses[httplib.CREATED])
 
-    def _foo_bar_container_foo_test_upload_INVALID_HASH(
-        self, method, url, body, headers
-    ):
+    def _foo_bar_container_foo_test_upload_INVALID_HASH(self, method, url, body, headers):
         # test_upload_object_invalid_hash1
         self._assert_content_length_header_is_string(headers=headers)
 
@@ -322,9 +334,7 @@ class AzureBlobsMockHttp(BaseRangeDownloadMockHttp, unittest.TestCase):
             httplib.responses[httplib.PARTIAL_CONTENT],
         )
 
-    def _foo_bar_container_foo_bar_object_range_stream(
-        self, method, url, body, headers
-    ):
+    def _foo_bar_container_foo_bar_object_range_stream(self, method, url, body, headers):
         # test_download_object_range_as_stream_success
         body = "0123456789123456789"
 
@@ -342,9 +352,7 @@ class AzureBlobsMockHttp(BaseRangeDownloadMockHttp, unittest.TestCase):
             httplib.responses[httplib.PARTIAL_CONTENT],
         )
 
-    def _foo_bar_container_foo_bar_object_INVALID_SIZE(
-        self, method, url, body, headers
-    ):
+    def _foo_bar_container_foo_bar_object_INVALID_SIZE(self, method, url, body, headers):
         # test_upload_object_invalid_file_size
         self._assert_content_length_header_is_string(headers=headers)
 
@@ -360,9 +368,7 @@ class AzuriteBlobsMockHttp(AzureBlobsMockHttp):
     fixtures = StorageFileFixtures("azurite_blobs")
 
     def _get_method_name(self, *args, **kwargs):
-        method_name = super(AzuriteBlobsMockHttp, self)._get_method_name(
-            *args, **kwargs
-        )
+        method_name = super()._get_method_name(*args, **kwargs)
 
         if method_name.startswith("_account"):
             method_name = method_name[8:]
@@ -420,6 +426,7 @@ class AzureBlobsTests(unittest.TestCase):
         self.assertTrue("etag" in containers[1].extra)
         self.assertTrue("lease" in containers[1].extra)
         self.assertTrue("meta_data" in containers[1].extra)
+        self.assertEqual(containers[1].extra["etag"], "0x8CFBAB7B5B82D8E")
 
     def test_list_container_objects_empty(self):
         self.mock_response_klass.type = "EMPTY"
@@ -453,9 +460,7 @@ class AzureBlobsTests(unittest.TestCase):
         AzureBlobsStorageDriver.RESPONSES_PER_REQUEST = 2
 
         container = Container(name="test_container", extra={}, driver=self.driver)
-        objects = self.driver.list_container_objects(
-            container=container, prefix="test_prefix"
-        )
+        objects = self.driver.list_container_objects(container=container, prefix="test_prefix")
         self.assertEqual(len(objects), 4)
 
         obj = objects[1]
@@ -485,17 +490,20 @@ class AzureBlobsTests(unittest.TestCase):
 
         self.assertTrue(container.name, "test_container200")
         self.assertTrue(container.extra["etag"], "0x8CFB877BB56A6FB")
-        self.assertTrue(
-            container.extra["last_modified"], "Fri, 04 Jan 2013 09:48:06 GMT"
-        )
+        self.assertTrue(container.extra["last_modified"], "Fri, 04 Jan 2013 09:48:06 GMT")
         self.assertTrue(container.extra["lease"]["status"], "unlocked")
         self.assertTrue(container.extra["lease"]["state"], "available")
         self.assertTrue(container.extra["meta_data"]["meta1"], "value1")
 
+        if self.driver.secure:
+            expected_url = "https://account.blob.core.windows.net/test_container200"
+        else:
+            expected_url = "http://localhost/account/test_container200"
+
+        self.assertEqual(container.extra["url"], expected_url)
+
     def test_get_object_cdn_url(self):
-        obj = self.driver.get_object(
-            container_name="test_container200", object_name="test"
-        )
+        obj = self.driver.get_object(container_name="test_container200", object_name="test")
 
         url = urlparse.urlparse(self.driver.get_object_cdn_url(obj))
         query = urlparse.parse_qs(url.query)
@@ -508,9 +516,7 @@ class AzureBlobsTests(unittest.TestCase):
         # trickier
         self.mock_response_klass.type = None
         try:
-            self.driver.get_object(
-                container_name="test_container100", object_name="test"
-            )
+            self.driver.get_object(container_name="test_container100", object_name="test")
         except ContainerDoesNotExistError:
             pass
         else:
@@ -520,9 +526,7 @@ class AzureBlobsTests(unittest.TestCase):
         # This method makes two requests which makes mocking the response a bit
         # trickier
         self.mock_response_klass.type = None
-        obj = self.driver.get_object(
-            container_name="test_container200", object_name="test"
-        )
+        obj = self.driver.get_object(container_name="test_container200", object_name="test")
 
         self.assertEqual(obj.name, "test")
         self.assertEqual(obj.container.name, "test_container200")
@@ -706,7 +710,7 @@ class AzureBlobsTests(unittest.TestCase):
         )
         self.assertTrue(result)
 
-        with open(destination_path, "r") as fp:
+        with open(destination_path) as fp:
             content = fp.read()
 
         self.assertEqual(content, "56")
@@ -932,9 +936,7 @@ class AzureBlobsTests(unittest.TestCase):
         # management of the connectionCls.host class attribute
         driver1 = self.driver_type("fakeaccount1", "deadbeafcafebabe==")
         driver2 = self.driver_type("fakeaccount2", "deadbeafcafebabe==")
-        driver3 = self.driver_type(
-            "fakeaccount3", "deadbeafcafebabe==", host="test.foo.bar.com"
-        )
+        driver3 = self.driver_type("fakeaccount3", "deadbeafcafebabe==", host="test.foo.bar.com")
 
         host1 = driver1.connection.host
         host2 = driver2.connection.host
@@ -1000,6 +1002,40 @@ class AzureBlobsTests(unittest.TestCase):
 
         self.assertEqual(host, "localhost")
         self.assertEqual(account_prefix, "fakeaccount1")
+
+    def test_storage_driver_azure_ad(self):
+        AzureBlobsActiveDirectoryConnection.conn_class = AzureBlobsMockHttp
+        driver = self.driver_type(
+            key="fakeaccount1",
+            secret="DEKjfhdakkdjfhei~",
+            tenant_id="77777777-7777-7777-7777-777777777777",
+            identity="55555555-5555-5555-5555-555555555555",
+            auth_type="azureAd",
+            secure=True,
+        )
+        host = driver.connection.host
+
+        self.assertEqual(host, "fakeaccount1.blob.core.windows.net")
+
+    def test_get_azure_ad_object_success(self):
+        AzureBlobsActiveDirectoryConnection.conn_class = AzureBlobsMockHttp
+        driver = self.driver_type(
+            key="fakeaccount1",
+            secret="DEKjfhdakkdjfhei~",
+            tenant_id="77777777-7777-7777-7777-777777777777",
+            identity="55555555-5555-5555-5555-555555555555",
+            auth_type="azureAd",
+            secure=True,
+        )
+        self.mock_response_klass.type = None
+        container = driver.get_container(container_name="test_container200")
+
+        self.assertTrue(container.name, "test_container200")
+        self.assertTrue(container.extra["etag"], "0x8CFB877BB56A6FB")
+        self.assertTrue(container.extra["last_modified"], "Fri, 04 Jan 2013 09:48:06 GMT")
+        self.assertTrue(container.extra["lease"]["status"], "unlocked")
+        self.assertTrue(container.extra["lease"]["state"], "available")
+        self.assertTrue(container.extra["meta_data"]["meta1"], "value1")
 
 
 class AzuriteBlobsTests(AzureBlobsTests):

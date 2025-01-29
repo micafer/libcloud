@@ -32,7 +32,7 @@ class LibcloudLBImmutableError(LibcloudLBError):
     pass
 
 
-class Provider(object):
+class Provider:
     """
     Defines for each of the supported providers
 
@@ -49,11 +49,9 @@ class Provider(object):
     DIMENSIONDATA = "dimensiondata"
     ELB = "elb"
     GCE = "gce"
-    GOGRID = "gogrid"
     NINEFOLD = "ninefold"
     NTTCIS = "nttcis"
     RACKSPACE = "rackspace"
-    SOFTLAYER = "softlayer"
 
     # Deprecated
     RACKSPACE_US = "rackspace_us"
@@ -66,7 +64,7 @@ OLD_CONSTANT_TO_NEW_MAPPING = {
 }
 
 
-class State(object):
+class State:
     """
     Standard states for a loadbalancer
 
@@ -81,7 +79,7 @@ class State(object):
     DELETED = 4
 
 
-class MemberCondition(object):
+class MemberCondition:
     """
     Each member of a load balancer can have an associated condition
     which determines its role within the load balancer.

@@ -17,23 +17,23 @@ Outscale SDK
 """
 
 import json
-import requests
+from typing import List
 from datetime import datetime
 
-from typing import List
-from libcloud.compute.base import NodeDriver
-from libcloud.compute.types import Provider
+import requests
+
 from libcloud.common.osc import OSCRequestSignerAlgorithmV4
 from libcloud.common.base import ConnectionUserAndKey
 from libcloud.compute.base import (
     Node,
-    NodeImage,
     KeyPair,
+    NodeImage,
+    NodeDriver,
+    NodeLocation,
     StorageVolume,
     VolumeSnapshot,
-    NodeLocation,
 )
-from libcloud.compute.types import NodeState
+from libcloud.compute.types import Provider, NodeState
 
 
 class OutscaleNodeDriver(NodeDriver):
@@ -460,9 +460,7 @@ class OutscaleNodeDriver(NodeDriver):
         if ex_user_data is not None:
             data.update({"UserData": ex_user_data})
         if ex_vm_initiated_shutdown_behavior is not None:
-            data.update(
-                {"VmInstantiatedShutdownBehavior": ex_vm_initiated_shutdown_behavior}
-            )
+            data.update({"VmInstantiatedShutdownBehavior": ex_vm_initiated_shutdown_behavior})
         if ex_vm_type is not None:
             data.update({"VmType": ex_vm_type})
         if ex_subnet_id is not None:
@@ -483,9 +481,7 @@ class OutscaleNodeDriver(NodeDriver):
                 return response.json()
             action = "ReadVms"
             data = {"DryRun": ex_dry_run, "Filters": {"VmIds": [node.id]}}
-            return self._to_node(
-                self._call_api(action, json.dumps(data)).json()["Vms"][0]
-            )
+            return self._to_node(self._call_api(action, json.dumps(data)).json()["Vms"][0])
         return node
 
     def reboot_node(self, node: Node):
@@ -709,7 +705,7 @@ class OutscaleNodeDriver(NodeDriver):
         permissions to perform the action.
         :type       dry_run: ``bool``
 
-        :return: list the status of one ore more vms
+        :return: list the status of one or more vms
         :rtype: ``list`` of ``dict``
         """
         action = "ReadVmsState"
@@ -987,9 +983,7 @@ class OutscaleNodeDriver(NodeDriver):
         if osu_export_api_key_id is not None:
             data["OsuExport"]["OsuApiKey"].update({"ApiKeyId": osu_export_api_key_id})
         if osu_export_api_secret_key is not None:
-            data["OsuExport"]["OsuApiKey"].update(
-                {"SecretKey": osu_export_api_secret_key}
-            )
+            data["OsuExport"]["OsuApiKey"].update({"SecretKey": osu_export_api_secret_key})
         response = self._call_api(action, json.dumps(data))
         if response.status_code == 200:
             return response.json()["ImageExportTask"]
@@ -1307,9 +1301,7 @@ class OutscaleNodeDriver(NodeDriver):
             return response.json()["Image"]
         return response.json()
 
-    def create_key_pair(
-        self, name: str, ex_dry_run: bool = False, ex_public_key: str = None
-    ):
+    def create_key_pair(self, name: str, ex_dry_run: bool = False, ex_public_key: str = None):
         """
         Create a new key pair.
 
@@ -1575,9 +1567,7 @@ class OutscaleNodeDriver(NodeDriver):
         if osu_export_api_key_id is not None:
             data["OsuExport"]["OsuApiKey"].update({"ApiKeyId": osu_export_api_key_id})
         if osu_export_api_secret_key is not None:
-            data["OsuExport"]["OsuApiKey"].update(
-                {"SecretKey": osu_export_api_secret_key}
-            )
+            data["OsuExport"]["OsuApiKey"].update({"SecretKey": osu_export_api_secret_key})
         response = self._call_api(action, json.dumps(data))
         if response.status_code == 200:
             return response.json()["SnapshotExportTask"]
@@ -1788,9 +1778,7 @@ class OutscaleNodeDriver(NodeDriver):
         :rtype: ``dict``
         """
         action = "LinkVolume"
-        data = json.dumps(
-            {"VmId": node.id, "VolumeId": volume.id, "DeviceName": device}
-        )
+        data = json.dumps({"VmId": node.id, "VolumeId": volume.id, "DeviceName": device})
         response = self._call_api(action, data)
         if response.status_code == 200:
             return True
@@ -2583,7 +2571,7 @@ class OutscaleNodeDriver(NodeDriver):
         client gateways.
         :type       tag_values: ``list`` of ``str``
 
-        :param      tags: TThe key/value combination of the tags
+        :param      tags: the key/value combination of the tags
         associated with the client gateways, in the following
         format: "Filters":{"Tags":["TAGKEY=TAGVALUE"]}.
         :type       tags: ``list`` of ``str``
@@ -2974,9 +2962,7 @@ class OutscaleNodeDriver(NodeDriver):
                 {"DirectLinkInterfaceName": direct_link_interface_name}
             )
         if outscale_private_ip is not None:
-            data["DirectLinkInterface"].update(
-                {"OutscalePrivateIp": outscale_private_ip}
-            )
+            data["DirectLinkInterface"].update({"OutscalePrivateIp": outscale_private_ip})
         if virtual_gateway_id is not None:
             data["DirectLinkInterface"].update({"VirtualGatewayId": virtual_gateway_id})
         if vlan is not None:
@@ -2994,7 +2980,7 @@ class OutscaleNodeDriver(NodeDriver):
         """
         Deletes a specified DirectLink interface.
 
-        :param      direct_link_interface_id: TThe ID of the DirectLink
+        :param      direct_link_interface_id: the ID of the DirectLink
         interface you want to delete. (required)
         :type       direct_link_interface_id: ``str``
 
@@ -3042,9 +3028,7 @@ class OutscaleNodeDriver(NodeDriver):
         if direct_link_ids is not None:
             data["Filters"].update({"DirectLinkIds": direct_link_ids})
         if direct_link_interface_ids is not None:
-            data["Filters"].update(
-                {"DirectLinkInterfaceIds": direct_link_interface_ids}
-            )
+            data["Filters"].update({"DirectLinkInterfaceIds": direct_link_interface_ids})
         response = self._call_api(action, json.dumps(data))
         if response.status_code == 200:
             return response.json()["DirectLinkInterfaces"]
@@ -3747,9 +3731,7 @@ class OutscaleNodeDriver(NodeDriver):
             return True
         return response.json()
 
-    def ex_list_listener_rules(
-        self, listener_rule_names: List[str] = None, dry_run: bool = False
-    ):
+    def ex_list_listener_rules(self, listener_rule_names: List[str] = None, dry_run: bool = False):
         """
         Describes one or more listener rules. By default, this action returns
         the full list of listener rules for the account.
@@ -4322,15 +4304,11 @@ class OutscaleNodeDriver(NodeDriver):
         if access_log_osu_bucket_prefix is not None:
             data["AccessLog"].update({"OsuBucketPrefix": access_log_osu_bucket_prefix})
         if access_log_publication_interval is not None:
-            data["AccessLog"].update(
-                {"PublicationInterval": access_log_publication_interval}
-            )
+            data["AccessLog"].update({"PublicationInterval": access_log_publication_interval})
         if health_check_interval is not None:
             data["HealthCheck"].update({"CheckInterval": health_check_interval})
         if health_check_healthy_threshold is not None:
-            data["HealthCheck"].update(
-                {"HealthyThreshold": health_check_healthy_threshold}
-            )
+            data["HealthCheck"].update({"HealthyThreshold": health_check_healthy_threshold})
         if health_check_path is not None:
             data["HealthCheck"].update({"Path": health_check_path})
         if health_check_port is not None:
@@ -4340,9 +4318,7 @@ class OutscaleNodeDriver(NodeDriver):
         if health_check_timeout is not None:
             data["HealthCheck"].update({"Timeout": health_check_timeout})
         if health_check_unhealthy_threshold is not None:
-            data["HealthCheck"].update(
-                {"UnhealthyThreshold": health_check_unhealthy_threshold}
-            )
+            data["HealthCheck"].update({"UnhealthyThreshold": health_check_unhealthy_threshold})
         if load_balancer_name is not None:
             data.update({"LoadBalancerName": load_balancer_name})
         if load_balancer_port is not None:
@@ -4519,7 +4495,7 @@ class OutscaleNodeDriver(NodeDriver):
         service, but does not release this EIP from your account. However, it
         does not delete any NAT service routes in your route tables.
 
-        :param      nat_service_id: TThe ID of the NAT service you want to
+        :param      nat_service_id: the ID of the NAT service you want to
         delete. (required)
         :type       nat_service_id: ``str``
 
@@ -5188,7 +5164,7 @@ class OutscaleNodeDriver(NodeDriver):
         peering connections.
         :type       tag_keys: ``list`` of ``str``
 
-        :param      tag_values: TThe values of the tags associated with the
+        :param      tag_values: the values of the tags associated with the
         Net peering connections.
         :type       tag_values: ``list`` of ``str``
 
@@ -5614,9 +5590,7 @@ class OutscaleNodeDriver(NodeDriver):
         if nic_id is not None:
             data.update({"NicId": nic_id})
         if link_nic_delete_on_vm_deletion is not None:
-            data["LinkNic"].update(
-                {"DeleteOnVmDeletion": link_nic_delete_on_vm_deletion}
-            )
+            data["LinkNic"].update({"DeleteOnVmDeletion": link_nic_delete_on_vm_deletion})
         if link_nic_id is not None:
             data["LinkNic"].update({"LinkNicId": link_nic_id})
         response = self._call_api(action, json.dumps(data))
@@ -6092,9 +6066,7 @@ class OutscaleNodeDriver(NodeDriver):
             data["Filters"].update({"LinkRouteTableIds": link_route_table_ids})
         if link_route_table_link_route_table_ids is not None:
             data["Filters"].update(
-                {
-                    "LinkRouteTableLinkRouteTableIds": link_route_table_link_route_table_ids
-                }
+                {"LinkRouteTableLinkRouteTableIds": link_route_table_link_route_table_ids}
             )
         if link_route_table_main is not None:
             data["Filters"].update({"LinkRouteTableMain": link_route_table_main})
@@ -6105,13 +6077,9 @@ class OutscaleNodeDriver(NodeDriver):
         if route_creation_methods is not None:
             data["Filters"].update({"RouteCreationMethods": route_creation_methods})
         if route_destination_ip_ranges is not None:
-            data["Filters"].update(
-                {"RouteDestinationIpRanges": route_destination_ip_ranges}
-            )
+            data["Filters"].update({"RouteDestinationIpRanges": route_destination_ip_ranges})
         if route_destination_service_ids is not None:
-            data["Filters"].update(
-                {"RouteDestinationServiceIds": route_destination_service_ids}
-            )
+            data["Filters"].update({"RouteDestinationServiceIds": route_destination_service_ids})
         if route_gateway_ids is not None:
             data["Filters"].update({"RouteGatewayIds": route_gateway_ids})
         if route_nat_service_ids is not None:
@@ -6392,7 +6360,7 @@ class OutscaleNodeDriver(NodeDriver):
         to delete.
         :type       security_group_id: ``str``
 
-        :param      security_group_name: TThe name of the security group.
+        :param      security_group_name: the name of the security group.
         :type       security_group_name: ``str``
 
         :param      dry_run: If true, checks whether you have the required
@@ -6442,7 +6410,7 @@ class OutscaleNodeDriver(NodeDriver):
         :param      security_group_names: The names of the security groups.
         :type       security_group_names: ``list`` of ``str``
 
-        :param      tag_keys: TThe keys of the tags associated with the
+        :param      tag_keys: the keys of the tags associated with the
         security groups.
         :type       tag_keys: ``list`` of ``str``
 
@@ -6450,7 +6418,7 @@ class OutscaleNodeDriver(NodeDriver):
         security groups.
         :type       tag_values: ``list`` of ``str``
 
-        :param      tags: TThe key/value combination of the tags associated
+        :param      tags: the key/value combination of the tags associated
         with the security groups, in the following format:
         "Filters":{"Tags":["TAGKEY=TAGVALUE"]}.
         :type       tags: ``list`` of ``str``
@@ -6550,7 +6518,7 @@ class OutscaleNodeDriver(NodeDriver):
         of the source security group.
         :type       sg_name_to_link: ``str``
 
-        :param      to_port_range: TThe end of the port range for the TCP and
+        :param      to_port_range: the end of the port range for the TCP and
         UDP protocols, or an ICMP type number.
         :type       to_port_range: ``int``
 
@@ -6643,7 +6611,7 @@ class OutscaleNodeDriver(NodeDriver):
         of the source security group.
         :type       sg_name_to_unlink: ``str``
 
-        :param      to_port_range: TThe end of the port range for the TCP and
+        :param      to_port_range: the end of the port range for the TCP and
         UDP protocols, or an ICMP type number.
         :type       to_port_range: ``int``
 
@@ -6679,9 +6647,7 @@ class OutscaleNodeDriver(NodeDriver):
             return response.json()["SecurityGroup"]
         return response.json()
 
-    def ex_create_virtual_gateway(
-        self, connection_type: str = None, dry_run: bool = False
-    ):
+    def ex_create_virtual_gateway(self, connection_type: str = None, dry_run: bool = False):
         """
         Creates a virtual gateway.
         A virtual gateway is the access point on the Net
@@ -6707,9 +6673,7 @@ class OutscaleNodeDriver(NodeDriver):
             return response.json()["VirtualGateway"]
         return response.json()
 
-    def ex_delete_virtual_gateway(
-        self, virtual_gateway_id: str = None, dry_run: bool = False
-    ):
+    def ex_delete_virtual_gateway(self, virtual_gateway_id: str = None, dry_run: bool = False):
         """
         Deletes a specified virtual gateway.
         Before deleting a virtual gateway, we
@@ -6970,7 +6934,7 @@ class OutscaleNodeDriver(NodeDriver):
 
         :param      map_public_ip_on_launch: If true, a public IP address is
         assigned to the network interface cards (NICs) created in the s
-        pecified Subnet. (required)
+        specified Subnet. (required)
         :type       map_public_ip_on_launch: ``bool``
 
         :param      dry_run: If true, checks whether you have the required
@@ -7030,7 +6994,7 @@ class OutscaleNodeDriver(NodeDriver):
         Subnets are located.
         :type       subregion_names: ``str``
 
-        :param      tag_keys: TThe keys of the tags associated with the
+        :param      tag_keys: the keys of the tags associated with the
         subnets.
         :type       tag_keys: ``list`` of ``str``
 
@@ -7038,7 +7002,7 @@ class OutscaleNodeDriver(NodeDriver):
         subnets.
         :type       tag_values: ``list`` of ``str``
 
-        :param      tags: TThe key/value combination of the tags associated
+        :param      tags: the key/value combination of the tags associated
         with the subnets, in the following format:
         "Filters":{"Tags":["TAGKEY=TAGVALUE"]}.
         :type       tags: ``list`` of ``str``
@@ -7101,7 +7065,7 @@ class OutscaleNodeDriver(NodeDriver):
         Subnet. (required)
         :type       net_id: ``str``
 
-        :param      subregion_name: TThe name of the Subregion in which you
+        :param      subregion_name: the name of the Subregion in which you
         want to create the Subnet.
         :type       subregion_name: ``str``
 
@@ -7260,7 +7224,7 @@ class OutscaleNodeDriver(NodeDriver):
         deleting the VPN connection. This enables you to delete the Net
         without waiting for the VPN connection to be deleted.
 
-        :param      vpn_connection_id: TThe ID of the VPN connection you want
+        :param      vpn_connection_id: the ID of the VPN connection you want
         to delete.
         (required)
         :type       vpn_connection_id: ``str``
@@ -7294,7 +7258,7 @@ class OutscaleNodeDriver(NodeDriver):
         deleting the VPN connection. This enables you to delete the Net
         without waiting for the VPN connection to be deleted.
 
-        :param      vpn_connection_id: TThe ID of the VPN connection you want
+        :param      vpn_connection_id: the ID of the VPN connection you want
         to delete.
         (required)
         :type       vpn_connection_id: ``str``
@@ -7364,7 +7328,7 @@ class OutscaleNodeDriver(NodeDriver):
         https://docs.outscale.com/api#deletevpnconnectionroute
         :type       static_routes_only: ``bool``
 
-        :param      tag_keys: TThe keys of the tags associated with the
+        :param      tag_keys: the keys of the tags associated with the
         subnets.
         :type       tag_keys: ``list`` of ``str``
 
@@ -7372,7 +7336,7 @@ class OutscaleNodeDriver(NodeDriver):
         subnets.
         :type       tag_values: ``list`` of ``str``
 
-        :param      tags: TThe key/value combination of the tags associated
+        :param      tags: the key/value combination of the tags associated
         with the subnets, in the following format:
         "Filters":{"Tags":["TAGKEY=TAGVALUE"]}.
         :type       tags: ``list`` of ``str``
@@ -7395,9 +7359,7 @@ class OutscaleNodeDriver(NodeDriver):
         if states is not None:
             data["Filters"].update({"States": states})
         if route_destination_ip_ranges is not None:
-            data["Filters"].update(
-                {"RouteDestinationIpRanges": route_destination_ip_ranges}
-            )
+            data["Filters"].update({"RouteDestinationIpRanges": route_destination_ip_ranges})
         if static_routes_only is not None:
             data["Filters"].update({"StaticRoutesOnly": static_routes_only})
         if tag_keys is not None:
@@ -7598,7 +7560,7 @@ class OutscaleNodeDriver(NodeDriver):
         permissions to perform the action.
         :type       dry_run: ``bool``
 
-        :return: true if successfull.
+        :return: true if successful.
         :rtype: ``bool`` if successful or  ``dict``
         """
         action = "DeleteApiAccessRule"
@@ -7643,7 +7605,7 @@ class OutscaleNodeDriver(NodeDriver):
         :type       dry_run: ``bool``
 
         :return: a List of API access rules.
-        :rtype: ``List`` of ``dict`` if successfull or  ``dict``
+        :rtype: ``List`` of ``dict`` if successful or  ``dict``
         """
 
         action = "ReadApiAccessRules"
@@ -7704,7 +7666,7 @@ class OutscaleNodeDriver(NodeDriver):
         :type       dry_run: ``bool``
 
         :return: a List of API access rules.
-        :rtype: ``List`` of ``dict`` if successfull or  ``dict``
+        :rtype: ``List`` of ``dict`` if successful or  ``dict``
         """
 
         action = "UpdateApiAccessRule"
@@ -7723,9 +7685,7 @@ class OutscaleNodeDriver(NodeDriver):
         return response.json()
 
     def _get_outscale_endpoint(self, region: str, version: str, action: str):
-        return "https://api.{}.{}/api/{}/{}".format(
-            region, self.base_uri, version, action
-        )
+        return "https://api.{}.{}/api/{}/{}".format(region, self.base_uri, version, action)
 
     def _call_api(self, action: str, data: str):
         headers = self._ex_generate_headers(action, data)
@@ -7783,22 +7743,25 @@ class OutscaleNodeDriver(NodeDriver):
         )
 
     def _to_volumes(self, volumes):
-        return [self._to_volumes(volume) for volume in volumes]
+        return [self._to_volume(volume) for volume in volumes]
 
     def _to_node(self, vm):
         name = ""
         private_ips = []
+        if "PrivateIp" in vm:
+            private_ips = [vm["PrivateIp"]]
+        public_ips = []
+        if "PublicIp" in vm:
+            public_ips = [vm["PublicIp"]]
         for tag in vm["Tags"]:
             if tag["Key"] == "Name":
                 name = tag["Value"]
-        if "Nics" in vm:
-            private_ips = vm["Nics"]["PrivateIps"]
 
         return Node(
             id=vm["VmId"],
             name=name,
             state=self.NODE_STATE[vm["State"]],
-            public_ips=[],
+            public_ips=public_ips,
             private_ips=private_ips,
             driver=self,
             extra=vm,

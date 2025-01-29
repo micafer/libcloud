@@ -13,14 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import with_statement
 
-from typing import Optional
-from typing import List
+from typing import List, Optional
 
-from libcloud.common.base import ConnectionUserAndKey, BaseDriver
+from libcloud.common.base import BaseDriver, ConnectionUserAndKey
 from libcloud.container.types import ContainerState
-
 
 __all__ = [
     "Container",
@@ -31,7 +28,7 @@ __all__ = [
 ]
 
 
-class Container(object):
+class Container:
     """
     Container.
     """
@@ -44,7 +41,8 @@ class Container(object):
         state,  # type: ContainerState
         ip_addresses,  # type: List[str]
         driver,  # type: ContainerDriver
-        extra=None,  # type: dict
+        extra=None,  # type: Optional[dict]
+        created_at=None,  # type: Optional[str]
     ):
         """
         :param id: Container id.
@@ -75,6 +73,7 @@ class Container(object):
         self.ip_addresses = ip_addresses
         self.driver = driver
         self.extra = extra or {}
+        self.created_at = created_at
 
     def start(self):
         # type: () -> Container
@@ -101,7 +100,7 @@ class Container(object):
         )
 
 
-class ContainerImage(object):
+class ContainerImage:
     """
     Container Image.
     """
@@ -113,7 +112,7 @@ class ContainerImage(object):
         path,  # type: str
         version,  # type: str
         driver,  # type: ContainerDriver
-        extra=None,  # type: dict
+        extra=None,  # type: Optional[dict]
     ):
         """
         :param id: Container Image id.
@@ -148,14 +147,14 @@ class ContainerImage(object):
         )
 
     def __repr__(self):
-        return "<ContainerImage: id=%s, name=%s, path=%s ...>" % (
+        return "<ContainerImage: id={}, name={}, path={} ...>".format(
             self.id,
             self.name,
             self.path,
         )
 
 
-class ContainerCluster(object):
+class ContainerCluster:
     """
     A cluster group for containers
     """
@@ -165,7 +164,7 @@ class ContainerCluster(object):
         id,  # type: str
         name,  # type: str
         driver,  # type: ContainerDriver
-        extra=None,  # type: dict
+        extra=None,  # type: Optional[dict]
     ):
         """
         :param id: Container Image id.
@@ -194,14 +193,14 @@ class ContainerCluster(object):
         return self.driver.destroy_cluster(cluster=self)
 
     def __repr__(self):
-        return "<ContainerCluster: id=%s, name=%s, provider=%s ...>" % (
+        return "<ContainerCluster: id={}, name={}, provider={} ...>".format(
             self.id,
             self.name,
             self.driver.name,
         )
 
 
-class ClusterLocation(object):
+class ClusterLocation:
     """
     A physical location where clusters can be.
 
@@ -281,9 +280,7 @@ class ContainerDriver(BaseDriver):
 
         :return: ``None``
         """
-        super(ContainerDriver, self).__init__(
-            key=key, secret=secret, secure=secure, host=host, port=port, **kwargs
-        )
+        super().__init__(key=key, secret=secret, secure=secure, host=host, port=port, **kwargs)
 
     def install_image(self, path):
         # type: (str) -> ContainerImage

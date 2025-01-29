@@ -15,26 +15,20 @@
 
 import os
 import sys
-import os.path
+import time
 import random
+import os.path
 import platform
 import warnings
 import threading
-import time
-
-from http.server import BaseHTTPRequestHandler
-from http.server import HTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import requests
 
 import libcloud.security
-
-from libcloud.utils.py3 import httplib
-from libcloud.utils.py3 import reload
-from libcloud.utils.py3 import assertRaisesRegex
 from libcloud.http import LibcloudConnection
-
-from libcloud.test import unittest
+from libcloud.test import unittest, no_network
+from libcloud.utils.py3 import reload, httplib, assertRaisesRegex
 
 ORIGINAL_CA_CERTS_PATH = libcloud.security.CA_CERTS_PATH
 
@@ -115,10 +109,26 @@ class HttpLayerTestCase(unittest.TestCase):
         cls.mock_server_thread.setDaemon(True)
         cls.mock_server_thread.start()
 
-    @classmethod
-    def tearDownCls(cls):
-        cls.mock_server_thread.kill()
+        cls.orig_http_proxy = os.environ.pop("http_proxy", None)
+        cls.orig_https_proxy = os.environ.pop("https_proxy", None)
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.mock_server.shutdown()
+        cls.mock_server.server_close()
+        cls.mock_server_thread.join()
+
+        if cls.orig_http_proxy:
+            os.environ["http_proxy"] = cls.orig_http_proxy
+        elif "http_proxy" in os.environ:
+            del os.environ["http_proxy"]
+
+        if cls.orig_https_proxy:
+            os.environ["https_proxy"] = cls.orig_https_proxy
+        elif "https_proxy" in os.environ:
+            del os.environ["https_proxy"]
+
+    @unittest.skipIf(no_network(), "Network is disabled")
     def test_prepared_request_empty_body_chunked_encoding_not_used(self):
         connection = LibcloudConnection(host=self.listen_host, port=self.listen_port)
         connection.prepared_request(
@@ -136,6 +146,7 @@ class HttpLayerTestCase(unittest.TestCase):
         self.assertEqual(connection.response.status_code, httplib.OK)
         self.assertEqual(connection.response.content, b"/test/prepared-request-2")
 
+    @unittest.skipIf(no_network(), "Network is disabled")
     def test_prepared_request_with_body(self):
         connection = LibcloudConnection(host=self.listen_host, port=self.listen_port)
         connection.prepared_request(
@@ -145,6 +156,7 @@ class HttpLayerTestCase(unittest.TestCase):
         self.assertEqual(connection.response.status_code, httplib.OK)
         self.assertEqual(connection.response.content, b"/test/prepared-request-3")
 
+    @unittest.skipIf(no_network(), "Network is disabled")
     def test_request_custom_timeout_no_timeout(self):
         def response_hook(*args, **kwargs):
             # Assert timeout has been passed correctly
@@ -152,11 +164,10 @@ class HttpLayerTestCase(unittest.TestCase):
 
         hooks = {"response": response_hook}
 
-        connection = LibcloudConnection(
-            host=self.listen_host, port=self.listen_port, timeout=5
-        )
+        connection = LibcloudConnection(host=self.listen_host, port=self.listen_port, timeout=5)
         connection.request(method="GET", url="/test", hooks=hooks)
 
+    @unittest.skipIf(no_network(), "Network is disabled")
     def test_request_custom_timeout_timeout(self):
         def response_hook(*args, **kwargs):
             # Assert timeout has been passed correctly
@@ -164,9 +175,7 @@ class HttpLayerTestCase(unittest.TestCase):
 
         hooks = {"response": response_hook}
 
-        connection = LibcloudConnection(
-            host=self.listen_host, port=self.listen_port, timeout=0.5
-        )
+        connection = LibcloudConnection(host=self.listen_host, port=self.listen_port, timeout=0.5)
         self.assertRaisesRegex(
             requests.exceptions.ReadTimeout,
             "Read timed out",

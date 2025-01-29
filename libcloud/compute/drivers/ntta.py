@@ -17,7 +17,7 @@ NTT America Driver
 """
 
 from libcloud.compute.providers import Provider
-from libcloud.common.dimensiondata import DimensionDataConnection, API_ENDPOINTS
+from libcloud.common.dimensiondata import API_ENDPOINTS, DimensionDataConnection
 from libcloud.compute.drivers.dimensiondata import DimensionDataNodeDriver
 
 DEFAULT_REGION = "ntta-na"
@@ -47,13 +47,12 @@ class NTTAmericaNodeDriver(DimensionDataNodeDriver):
         region=DEFAULT_REGION,
         **kwargs,
     ):
-
         if region not in API_ENDPOINTS:
             raise ValueError("Invalid region: %s" % (region))
 
         self.selected_region = API_ENDPOINTS[region]
 
-        super(NTTAmericaNodeDriver, self).__init__(
+        super().__init__(
             key=key,
             secret=secret,
             secure=secure,

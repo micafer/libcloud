@@ -15,31 +15,37 @@
 """
 Tests for Google Connection classes.
 """
-import datetime
-import mock
 import os
 import sys
+import time
+import random
+import urllib
+import datetime
 import unittest
+import threading
+from unittest import mock
+
+import requests
+
+from libcloud.test import MockHttp, LibcloudTestCase
+from libcloud.utils.py3 import httplib
+from libcloud.common.google import (
+    GoogleAuthType,
+    GoogleAuthError,
+    GoogleBaseConnection,
+    GoogleOAuth2Credential,
+    GoogleBaseAuthConnection,
+    GoogleServiceAcctAuthConnection,
+    GoogleInstalledAppAuthConnection,
+    GoogleGCEServiceAcctAuthConnection,
+    _utcnow,
+    _utc_timestamp,
+)
 
 try:
     import simplejson as json
 except ImportError:
     import json
-
-from libcloud.common.google import (
-    GoogleAuthError,
-    GoogleAuthType,
-    GoogleBaseAuthConnection,
-    GoogleInstalledAppAuthConnection,
-    GoogleServiceAcctAuthConnection,
-    GoogleGCEServiceAcctAuthConnection,
-    GoogleOAuth2Credential,
-    GoogleBaseConnection,
-    _utcnow,
-    _utc_timestamp,
-)
-from libcloud.test import MockHttp, LibcloudTestCase
-from libcloud.utils.py3 import httplib
 
 
 # Skip some tests if cryptography is unavailable
@@ -53,7 +59,7 @@ SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 PEM_KEY = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey.pem")
 JSON_KEY = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey.json")
 JSON_KEY_INVALID = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey_invalid.json")
-with open(JSON_KEY, "r") as f:
+with open(JSON_KEY) as f:
     KEY_STR = json.loads(f.read())["private_key"]
 
 
@@ -83,16 +89,14 @@ GCS_S3_PARAMS_61 = (
     "0102030405060708091011121314151617181920",
 )
 PEM_KEY_FILE = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey.pem")
-PEM_KEY_FILE_INVALID = os.path.join(
-    SCRIPT_PATH, "fixtures", "google", "pkey_invalid.pem"
-)
+PEM_KEY_FILE_INVALID = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey_invalid.pem")
 
 JSON_KEY_FILE = os.path.join(SCRIPT_PATH, "fixtures", "google", "pkey.json")
 
-with open(JSON_KEY_FILE, "r") as f:
+with open(JSON_KEY_FILE) as f:
     PEM_KEY_STR = json.loads(f.read())["private_key"]
 
-with open(JSON_KEY_FILE, "r") as f:
+with open(JSON_KEY_FILE) as f:
     JSON_KEY_STR = f.read()
     JSON_KEY = json.loads(JSON_KEY_STR)
 
@@ -142,7 +146,7 @@ STUB_TOKEN_FROM_FILE = {
 }
 
 
-class MockJsonResponse(object):
+class MockJsonResponse:
     def __init__(self, body):
         self.object = body
 
@@ -164,9 +168,7 @@ class GoogleTestCase(LibcloudTestCase):
 
     PATCHER_SUFFIX = "_patcher"
 
-    _utcnow_patcher = mock.patch(
-        "libcloud.common.google._utcnow", return_value=STUB_UTCNOW
-    )
+    _utcnow_patcher = mock.patch("libcloud.common.google._utcnow", return_value=STUB_UTCNOW)
 
     _authtype_is_gce_patcher = mock.patch(
         "libcloud.common.google.GoogleAuthType._is_gce", return_value=False
@@ -181,21 +183,16 @@ class GoogleTestCase(LibcloudTestCase):
         "libcloud.common.google.GoogleOAuth2Credential._write_token_to_file"
     )
 
-    _ia_get_code_patcher = mock.patch(
-        "libcloud.common.google.GoogleInstalledAppAuthConnection.get_code",
-        return_value=1234,
-    )
-
     @classmethod
     def setUpClass(cls):
-        super(GoogleTestCase, cls).setUpClass()
+        super().setUpClass()
 
         for patcher in [a for a in dir(cls) if a.endswith(cls.PATCHER_SUFFIX)]:
             getattr(cls, patcher).start()
 
     @classmethod
     def tearDownClass(cls):
-        super(GoogleTestCase, cls).tearDownClass()
+        super().tearDownClass()
 
         for patcher in [a for a in dir(cls) if a.endswith(cls.PATCHER_SUFFIX)]:
             getattr(cls, patcher).stop()
@@ -243,6 +240,11 @@ class GoogleInstalledAppAuthConnectionTest(GoogleTestCase):
     Tests for GoogleInstalledAppAuthConnection
     """
 
+    _ia_get_code_patcher = mock.patch(
+        "libcloud.common.google.GoogleInstalledAppAuthConnection.get_code",
+        return_value=1234,
+    )
+
     def setUp(self):
         GoogleInstalledAppAuthConnection.conn_class = GoogleAuthMockHttp
         self.mock_scopes = ["https://www.googleapis.com/auth/foo"]
@@ -276,6 +278,62 @@ class GoogleInstalledAppAuthConnectionTest(GoogleTestCase):
         self.assertTrue("refresh_token" in new_token2)
 
 
+class GoogleInstalledAppAuthConnectionFirstLoginTest(LibcloudTestCase):
+    def setUp(self):
+        GoogleInstalledAppAuthConnection.conn_class = GoogleAuthMockHttp
+        self.mock_scopes = ["https://www.googleapis.com/auth/foo"]
+        kwargs = {"scopes": self.mock_scopes}
+        self.conn = GoogleInstalledAppAuthConnection(*GCE_PARAMS, **kwargs)
+        # We select random port on which HTTP server binds to, to avoid race conditions when
+        # running multiple tests in parallel
+        self.conn.redirect_uri_port = random.randint(5000, 20000)
+
+    def test_it_receives_the_code_that_google_sends_via_local_loopback(self):
+        expected_code = "1234ABC"
+        received_code = self._do_first_sign_in(expected_code=expected_code, state=self.conn._state)
+        self.assertEqual(received_code, expected_code)
+
+    def test_it_aborts_if_state_is_suspicious(self):
+        received_code = self._do_first_sign_in(
+            expected_code="1234ABC", state=self.conn._state + "very suspicious"
+        )
+        self.assertEqual(received_code, None)
+
+    def _do_first_sign_in(self, expected_code, state):
+        """
+        :param expected_code: The code that the fake Google sign-in local GET request will have in its query.
+        :type expected_code: `str`
+        :param state: The state that the fake Google sign-in local GET request will have in its query.
+        :type state: `str`
+        :return: The code that was extracted through local loopback.
+        :rtype: `Optional[str]`
+        """
+        received_code = None
+
+        def _get_code():
+            nonlocal received_code
+            received_code = self.conn.get_code()
+
+        def _send_code():
+            target_url = self.conn._redirect_uri_with_port
+            params = {"state": state, "code": expected_code}
+            params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+            requests.get(url=target_url, params=params)
+
+        fake_sign_in_thread = threading.Thread(target=_get_code)
+        fake_google_response = threading.Thread(target=_send_code)
+
+        fake_sign_in_thread.start()
+        # TODO: Do a proper fix for race condition and only start get_code once _send_code
+        # is initialized and up and running
+        time.sleep(0.2)
+        fake_google_response.start()
+        fake_google_response.join()
+        fake_sign_in_thread.join()
+
+        return received_code
+
+
 class GoogleAuthTypeTest(GoogleTestCase):
     def test_guess(self):
         self.assertEqual(GoogleAuthType.guess_type(GCE_PARAMS_IA[0]), GoogleAuthType.IA)
@@ -283,34 +341,27 @@ class GoogleAuthTypeTest(GoogleTestCase):
             # Since _is_gce currently depends on the environment, not on
             # parameters, other auths should override GCE. It does not make
             # sense for IA auth to happen on GCE, which is why it's left out.
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCE_PARAMS[0]), GoogleAuthType.SA
-            )
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCS_S3_PARAMS_20[0]), GoogleAuthType.GCS_S3
-            )
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCS_S3_PARAMS_24[0]), GoogleAuthType.GCS_S3
-            )
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCS_S3_PARAMS_61[0]), GoogleAuthType.GCS_S3
-            )
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCE_PARAMS_GCE[0]), GoogleAuthType.GCE
-            )
+            self.assertEqual(GoogleAuthType.guess_type(GCE_PARAMS[0]), GoogleAuthType.SA)
+            self.assertEqual(GoogleAuthType.guess_type(GCS_S3_PARAMS_20[0]), GoogleAuthType.GCS_S3)
+            self.assertEqual(GoogleAuthType.guess_type(GCS_S3_PARAMS_24[0]), GoogleAuthType.GCS_S3)
+            self.assertEqual(GoogleAuthType.guess_type(GCS_S3_PARAMS_61[0]), GoogleAuthType.GCS_S3)
+            self.assertEqual(GoogleAuthType.guess_type(GCE_PARAMS_GCE[0]), GoogleAuthType.GCE)
 
     def test_guess_gce_metadata_server_not_called_for_ia(self):
         # Verify that we don't try to contact GCE metadata server in case IA
         # credentials are used
         with mock.patch.object(GoogleAuthType, "_is_gce", return_value=False):
             self.assertEqual(GoogleAuthType._is_gce.call_count, 0)
-            self.assertEqual(
-                GoogleAuthType.guess_type(GCE_PARAMS_IA_2[0]), GoogleAuthType.IA
-            )
+            self.assertEqual(GoogleAuthType.guess_type(GCE_PARAMS_IA_2[0]), GoogleAuthType.IA)
             self.assertEqual(GoogleAuthType._is_gce.call_count, 0)
 
 
 class GoogleOAuth2CredentialTest(GoogleTestCase):
+    _ia_get_code_patcher = mock.patch(
+        "libcloud.common.google.GoogleInstalledAppAuthConnection.get_code",
+        return_value=1234,
+    )
+
     def test_init_oauth2(self):
         kwargs = {"auth_type": GoogleAuthType.IA}
         cred = GoogleOAuth2Credential(*GCE_PARAMS, **kwargs)
@@ -319,9 +370,7 @@ class GoogleOAuth2CredentialTest(GoogleTestCase):
         self.assertEqual(cred.token, STUB_TOKEN_FROM_FILE)
 
         # No token file, get a new token. Check that it gets written to file.
-        with mock.patch.object(
-            GoogleOAuth2Credential, "_get_token_from_file", return_value=None
-        ):
+        with mock.patch.object(GoogleOAuth2Credential, "_get_token_from_file", return_value=None):
             cred = GoogleOAuth2Credential(*GCE_PARAMS, **kwargs)
             expected = STUB_IA_TOKEN
             expected["expire_time"] = cred.token["expire_time"]
@@ -370,39 +419,25 @@ class GoogleOAuth2CredentialTest(GoogleTestCase):
         if SHA256:
             kwargs["auth_type"] = GoogleAuthType.SA
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_PEM_KEY_FILE, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_JSON_KEY_FILE, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_PEM_KEY, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_JSON_KEY, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_KEY, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
             kwargs["auth_type"] = GoogleAuthType.SA
             cred1 = GoogleOAuth2Credential(*GCE_PARAMS_JSON_KEY_STR, **kwargs)
-            self.assertTrue(
-                isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection)
-            )
+            self.assertTrue(isinstance(cred1.oauth2_conn, GoogleServiceAcctAuthConnection))
 
-            self.assertRaises(
-                GoogleAuthError, GoogleOAuth2Credential, *GCE_PARAMS, **kwargs
-            )
+            self.assertRaises(GoogleAuthError, GoogleOAuth2Credential, *GCE_PARAMS, **kwargs)
 
             # Invalid pem key
             kwargs["auth_type"] = GoogleAuthType.SA
@@ -431,9 +466,7 @@ class GoogleOAuth2CredentialTest(GoogleTestCase):
 
         kwargs["auth_type"] = GoogleAuthType.GCE
         cred3 = GoogleOAuth2Credential(*GCE_PARAMS_GCE, **kwargs)
-        self.assertTrue(
-            isinstance(cred3.oauth2_conn, GoogleGCEServiceAcctAuthConnection)
-        )
+        self.assertTrue(isinstance(cred3.oauth2_conn, GoogleGCEServiceAcctAuthConnection))
 
 
 class GoogleBaseConnectionTest(GoogleTestCase):
@@ -459,7 +492,7 @@ class GoogleBaseConnectionTest(GoogleTestCase):
     def test_pre_connect_hook(self):
         old_params = {}
         old_headers = {}
-        auth_str = "%s %s" % (
+        auth_str = "{} {}".format(
             STUB_TOKEN_FROM_FILE["token_type"],
             STUB_TOKEN_FROM_FILE["access_token"],
         )
@@ -509,10 +542,7 @@ class GoogleBaseConnectionTest(GoogleTestCase):
 
     def test_morph_action_hook(self):
         self.conn.request_path = "/compute/apiver/project/project-name"
-        action1 = (
-            "https://www.googleapis.com/compute/apiver/project"
-            "/project-name/instances"
-        )
+        action1 = "https://www.googleapis.com/compute/apiver/project" "/project-name/instances"
         action2 = "/instances"
         expected_request = "/compute/apiver/project/project-name/instances"
         request1 = self.conn.morph_action_hook(action1)

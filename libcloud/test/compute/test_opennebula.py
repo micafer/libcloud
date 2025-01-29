@@ -22,28 +22,26 @@ OpenNebula.org test suite.
 
 __docformat__ = "epytext"
 
-import unittest
 import sys
+import unittest
 
-from libcloud.utils.py3 import httplib
-
-from libcloud.compute.base import Node, NodeImage, NodeSize, NodeState
-from libcloud.compute.drivers.opennebula import OpenNebulaNodeDriver
-from libcloud.compute.drivers.opennebula import OpenNebulaNetwork
-from libcloud.compute.drivers.opennebula import OpenNebulaNodeSize
-from libcloud.compute.drivers.opennebula import ACTION
 import libcloud.compute.drivers.opennebula
-from libcloud.test.file_fixtures import ComputeFileFixtures
 from libcloud.test import MockHttp
-
+from libcloud.utils.py3 import httplib
+from libcloud.compute.base import Node, NodeSize, NodeImage, NodeState
 from libcloud.test.secrets import OPENNEBULA_PARAMS
-
+from libcloud.test.file_fixtures import ComputeFileFixtures
+from libcloud.compute.drivers.opennebula import (
+    ACTION,
+    OpenNebulaNetwork,
+    OpenNebulaNodeSize,
+    OpenNebulaNodeDriver,
+)
 
 libcloud.compute.drivers.opennebula.API_HOST = "dummy"
 
 
 class OpenNebula_1_4_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v1.4.
     """
@@ -89,9 +87,7 @@ class OpenNebula_1_4_Tests(unittest.TestCase):
             )
         )
 
-        node = self.driver.create_node(
-            name="Compute 5", image=image, size=size, networks=networks
-        )
+        node = self.driver.create_node(name="Compute 5", image=image, size=size, networks=networks)
 
         self.assertEqual(node.id, "5")
         self.assertEqual(node.name, "Compute 5")
@@ -255,7 +251,6 @@ class OpenNebula_1_4_Tests(unittest.TestCase):
 
 
 class OpenNebula_2_0_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v2.0 through v2.2.
     """
@@ -321,9 +316,7 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
         self.assertEqual(node.public_ips[1].size, 1)
         self.assertEqual(node.public_ips[1].extra["mac"], "02:00:c0:a8:01:01")
         self.assertEqual(node.private_ips, [])
-        self.assertTrue(
-            len([s for s in self.driver.list_sizes() if s.id == node.size.id]) == 1
-        )
+        self.assertTrue(len([s for s in self.driver.list_sizes() if s.id == node.size.id]) == 1)
         self.assertEqual(node.image.id, "5")
         self.assertEqual(node.image.name, "Ubuntu 9.04 LAMP")
         self.assertEqual(node.image.extra["type"], "DISK")
@@ -362,8 +355,7 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
         self.assertEqual(node.public_ips[1].extra["mac"], "02:00:c0:a8:01:01")
         self.assertEqual(node.private_ips, [])
         self.assertTrue(
-            len([size for size in self.driver.list_sizes() if size.id == node.size.id])
-            == 1
+            len([size for size in self.driver.list_sizes() if size.id == node.size.id]) == 1
         )
         self.assertEqual(node.size.id, "1")
         self.assertEqual(node.size.name, "small")
@@ -376,14 +368,7 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
         self.assertIsNone(node.size.bandwidth)
         self.assertIsNone(node.size.price)
         self.assertTrue(
-            len(
-                [
-                    image
-                    for image in self.driver.list_images()
-                    if image.id == node.image.id
-                ]
-            )
-            == 1
+            len([image for image in self.driver.list_images() if image.id == node.image.id]) == 1
         )
         self.assertEqual(node.image.id, "5")
         self.assertEqual(node.image.name, "Ubuntu 9.04 LAMP")
@@ -407,8 +392,7 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
         self.assertEqual(node.public_ips[1].extra["mac"], "02:00:c0:a8:01:02")
         self.assertEqual(node.private_ips, [])
         self.assertTrue(
-            len([size for size in self.driver.list_sizes() if size.id == node.size.id])
-            == 1
+            len([size for size in self.driver.list_sizes() if size.id == node.size.id]) == 1
         )
         self.assertEqual(node.size.id, "1")
         self.assertEqual(node.size.name, "small")
@@ -421,14 +405,7 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
         self.assertIsNone(node.size.bandwidth)
         self.assertIsNone(node.size.price)
         self.assertTrue(
-            len(
-                [
-                    image
-                    for image in self.driver.list_images()
-                    if image.id == node.image.id
-                ]
-            )
-            == 1
+            len([image for image in self.driver.list_images() if image.id == node.image.id]) == 1
         )
         self.assertEqual(node.image.id, "15")
         self.assertEqual(node.image.name, "Ubuntu 9.04 LAMP")
@@ -558,7 +535,6 @@ class OpenNebula_2_0_Tests(unittest.TestCase):
 
 
 class OpenNebula_3_0_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v3.0.
     """
@@ -601,7 +577,6 @@ class OpenNebula_3_0_Tests(unittest.TestCase):
 
 
 class OpenNebula_3_2_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v3.2.
     """
@@ -665,7 +640,6 @@ class OpenNebula_3_2_Tests(unittest.TestCase):
 
 
 class OpenNebula_3_6_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v3.6.
     """
@@ -734,7 +708,6 @@ class OpenNebula_3_6_Tests(unittest.TestCase):
 
 
 class OpenNebula_3_8_Tests(unittest.TestCase):
-
     """
     OpenNebula.org test suite for OpenNebula v3.8.
     """
@@ -785,7 +758,6 @@ class OpenNebula_3_8_Tests(unittest.TestCase):
 
 
 class OpenNebula_1_4_MockHttp(MockHttp):
-
     """
     Mock HTTP server for testing v1.4 of the OpenNebula.org compute driver.
     """
@@ -926,7 +898,6 @@ class OpenNebula_1_4_MockHttp(MockHttp):
 
 
 class OpenNebula_2_0_MockHttp(MockHttp):
-
     """
     Mock HTTP server for testing v2.0 through v3.2 of the OpenNebula.org
     compute driver.
@@ -1068,7 +1039,6 @@ class OpenNebula_2_0_MockHttp(MockHttp):
 
 
 class OpenNebula_3_0_MockHttp(OpenNebula_2_0_MockHttp):
-
     """
     Mock HTTP server for testing v3.0 of the OpenNebula.org compute driver.
     """
@@ -1113,7 +1083,6 @@ class OpenNebula_3_0_MockHttp(OpenNebula_2_0_MockHttp):
 
 
 class OpenNebula_3_2_MockHttp(OpenNebula_3_0_MockHttp):
-
     """
     Mock HTTP server for testing v3.2 of the OpenNebula.org compute driver.
     """
@@ -1146,7 +1115,6 @@ class OpenNebula_3_2_MockHttp(OpenNebula_3_0_MockHttp):
 
 
 class OpenNebula_3_6_MockHttp(OpenNebula_3_2_MockHttp):
-
     """
     Mock HTTP server for testing v3.6 of the OpenNebula.org compute driver.
     """
@@ -1214,7 +1182,6 @@ class OpenNebula_3_6_MockHttp(OpenNebula_3_2_MockHttp):
 
 
 class OpenNebula_3_8_MockHttp(OpenNebula_3_2_MockHttp):
-
     """
     Mock HTTP server for testing v3.8 of the OpenNebula.org compute driver.
     """

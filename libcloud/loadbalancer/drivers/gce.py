@@ -18,7 +18,7 @@ try:
 except ImportError:
     import json  # NOQA
 
-from libcloud.loadbalancer.base import LoadBalancer, Member, Driver, Algorithm
+from libcloud.loadbalancer.base import Driver, Member, Algorithm, LoadBalancer
 from libcloud.compute.drivers.gce import GCEConnection, GCENodeDriver
 
 # GCE doesn't actually give you an algorithm choice, but this is here simply as
@@ -36,7 +36,6 @@ class GCELBDriver(Driver):
     _VALUE_TO_ALGORITHM_MAP = {"RANDOM": Algorithm.RANDOM}
 
     def __init__(self, *args, **kwargs):
-
         if kwargs.get("gce_driver"):
             self.gce = kwargs["gce_driver"]
         else:
@@ -286,10 +285,7 @@ class GCELBDriver(Driver):
 
         :rtype: ``list`` of :class:`Member`
         """
-        return [
-            self._node_to_member(n, balancer)
-            for n in balancer.extra["targetpool"].nodes
-        ]
+        return [self._node_to_member(n, balancer) for n in balancer.extra["targetpool"].nodes]
 
     def ex_create_healthcheck(self, *args, **kwargs):
         return self.gce.ex_create_healthcheck(*args, **kwargs)

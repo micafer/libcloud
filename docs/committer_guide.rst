@@ -74,7 +74,7 @@ preparing a release.
 * Make sure ``CHANGES`` file is up to date
 * Make sure ``__version__`` string in ``libcloud/__init__.py`` is up to date
 * Make sure ``version`` and ``release`` in ``docs/conf.py`` are up to date
-* Update constants, pricing and other auto-generated data: ``tox -e scrape-ec2-sizes,scrape-ec2-prices``
+* Update constants, pricing and other auto-generated data: ``tox -e scrape-ec2-sizes,scrape-ec2-prices,black,isort``
 
 1. Pre-release check list
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -97,15 +97,18 @@ preparing a release.
 
 .. note::
 
-  It's important that you have the latest versions of ``setuptools``, ``wheel``
-  and ``pip`` installed to ensure the generated wheel files contain correct
-  metadata.
+  It's important that you have the latest versions of ``build`` package
+  installed to ensure the generated wheel files contain correct metadata.
 
-We have a script that runs the required setup.py commands and then hashes
-and signs the files. You will need the latest version of ``pip`` and the ``wheel``
-package. To run it:
+We have a script that runs the required commands and then hashes and signs the
+files. You will need the latest version of ``build`` package.
+
+To run it:
 
 .. sourcecode:: bash
+
+    # Install build dependencies
+    pip install -e ".[build]"
 
     cd dist
     ./release.sh -u <yourusername>@apache.org
@@ -114,7 +117,7 @@ package. To run it:
 your local GPG database.
 
 This should result in a set of
-``apache-libcloud-${VERSION}.{tar.bz2,tar.gz,zip,whl}{,asc,md5,sha1}`` files that
+``apache-libcloud-${VERSION}.{tar.gz,whl}{,asc,md5,sha1}`` files that
 are suitable to be uploaded for a release.
 
 Copy the artifacts in another directory, unpack one of them and test it with ``tox``.
@@ -173,10 +176,24 @@ key.
 7. Publishing package to PyPi
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We have a script that runs uploads the signed Python source files to PyPi. It uses twine, so ensure
-you have twine available in your path `which twine` before running. Twine can be downloaded from https://pypi.python.org/pypi/twine
+We have a script that uploads the signed Python source files to PyPi. It
+uses twine, so ensure you have twine available in your path `which twine`
+before running. Twine can be downloaded from https://pypi.python.org/pypi/twine.
+
+You should also ensure you have 2FA / MFA enabled for your PyPi account and
+generate a new API token with apache-libcloud project scope which gives
+publish permission.
+
+For more information on how to generate an API tokens and configure twine to
+use this token, see:
+
+* https://pypi.org/help/#apitoken
+* https://kynan.github.io/blog/2020/05/23/how-to-upload-your-package-to-the-python-package-index-pypi-test-server
 
 .. sourcecode:: bash
+
+    # Install publish dependencies
+    pip install -e ".[publish]"
 
     cd dist
     ./deploy.sh
@@ -233,13 +250,14 @@ To:
 10. Updating website
 ~~~~~~~~~~~~~~~~~~~~
 
-Check out the website using SVN: ``svn co https://svn.apache.org/repos/asf/libcloud/site/trunk``
+Check out the website using git: ``git clone http://gitbox.apache.org/repos/asf/libcloud-site.git``
 
 * Update the front page (``source/index.html`` file)
 * Update "Downloads" page (``source/downloads.md`` file)
 * Add a blog entry in the ``_posts`` directory.
 
-Build the site locally and make sure everything is correct. Check the ``README.md`` file.
+Build the site locally and make sure everything is correct before pushing website updated. Check
+the ``README.md`` file in that repo on how to do that.
 
 11. Sending announcements
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -313,7 +331,7 @@ Body::
     This bug could manifest itself while uploading a file with some of the storage providers.
 
     Besides this bug fix, it includes a couple of other smaller bug fixes and changes. Full change log
-    can be found at https://git-wip-us.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=b7747f777afdeb63bcacf496d1d034f1b3287c31;hb=c4b3daae946049652a500a8515929b4cbf14a6b4
+    can be found at https://git.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=b7747f777afdeb63bcacf496d1d034f1b3287c31;hb=c4b3daae946049652a500a8515929b4cbf14a6b4
 
     Release artifacts can be found at http://people.apache.org/~tomaz/libcloud/.
 
@@ -405,7 +423,7 @@ Body::
     Content-Length regression which broke create and update operations in
     the Bluebox Compute and Azure Storage driver (LIBCLOUD-362, LIBCLOUD-3901).
 
-    Full change log can be found at <https://git-wip-us.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=ca90c84e296ca82e2206eb86ed7364c588aad503;hb=602b6a7a27dca6990a38eb887e1d6615826387d5>
+    Full change log can be found at <https://git.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=ca90c84e296ca82e2206eb86ed7364c588aad503;hb=602b6a7a27dca6990a38eb887e1d6615826387d5>
 
     Download
 
@@ -445,6 +463,6 @@ Body::
 
     Thanks to everyone who contributed and made this release possible! Full list of
     people who contributed to this release can be found in the CHANGES file
-    <https://git-wip-us.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=ca90c84e296ca82e2206eb86ed7364c588aad503;hb=602b6a7a27dca6990a38eb887e1d6615826387d5>.
+    <https://git.apache.org/repos/asf?p=libcloud.git;a=blob;f=CHANGES;h=ca90c84e296ca82e2206eb86ed7364c588aad503;hb=602b6a7a27dca6990a38eb887e1d6615826387d5>.
 
 .. _`PyPi release management page`: https://pypi.python.org/pypi?%3Aaction=pkg_edit&name=apache-libcloud

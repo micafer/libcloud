@@ -17,12 +17,18 @@
 Wraps multiple ways to communicate over SSH.
 """
 
-from typing import Type
-from typing import Optional
-from typing import Tuple
-from typing import List
-from typing import Union
-from typing import cast
+import os
+import re
+import time
+import logging
+import warnings
+import subprocess
+from typing import List, Type, Tuple, Union, Optional, cast
+from os.path import join as pjoin
+from os.path import split as psplit
+
+from libcloud.utils.py3 import StringIO, b
+from libcloud.utils.logging import ExtraLogFormatter
 
 have_paramiko = False
 
@@ -30,26 +36,15 @@ try:
     import paramiko
 
     have_paramiko = True
+
+    PARAMIKO_VERSION_TUPLE = tuple(int(x) for x in paramiko.__version__.split("."))
 except ImportError:
-    pass
+    PARAMIKO_VERSION_TUPLE = ()
 
 # Depending on your version of Paramiko, it may cause a deprecation
 # warning on Python 2.6.
 # Ref: https://bugs.launchpad.net/paramiko/+bug/392973
 
-import os
-import re
-import time
-import subprocess
-import logging
-import warnings
-
-from os.path import split as psplit
-from os.path import join as pjoin
-
-from libcloud.utils.logging import ExtraLogFormatter
-from libcloud.utils.py3 import StringIO
-from libcloud.utils.py3 import b
 
 __all__ = [
     "BaseSSHClient",
@@ -59,6 +54,29 @@ __all__ = [
 ]
 
 SUPPORTED_KEY_TYPES_URL = "https://libcloud.readthedocs.io/en/latest/compute/deployment.html#supported-private-ssh-key-types"  # NOQA
+
+# Set it to False to disable backward compatibility mode when running
+# paramiko >= 2.9.0. In backward compatibility mode we try to disable newer
+# SHA-2 based public key algorithms in case server returns auth error. This
+# way it works correctly with older OpenSSH servers which don't support those
+# algorithms aka the behavior is the same as with paramiko < 2.9.0.
+# In case users only talk to newer OpenSSH servers which support those
+# algorithms, they may want to disable this workaround.
+LIBCLOUD_PARAMIKO_SHA2_BACKWARD_COMPATIBILITY = os.environ.get(
+    "LIBCLOUD_PARAMIKO_SHA2_BACKWARD_COMPATIBILITY", "true"
+).lower() in [
+    "true",
+    "1",
+]
+
+SHA2_PUBKEY_NOT_SUPPORTED_AUTH_ERROR_MSG = """
+Received authentication error from the server. Disabling SHA-2 variants of RSA
+key verification algorithm for backward compatibility reasons and trying
+connecting again.
+
+You can disable this behavior by setting
+LIBCLOUD_PARAMIKO_SHA2_BACKWARD_COMPATIBILITY environment variable to "false".
+""".strip()
 
 
 class SSHCommandTimeoutError(Exception):
@@ -74,10 +92,10 @@ class SSHCommandTimeoutError(Exception):
         self.stderr = stderr
 
         self.message = "Command didn't finish in %s seconds" % (timeout)
-        super(SSHCommandTimeoutError, self).__init__(self.message)
+        super().__init__(self.message)
 
     def __repr__(self):
-        return '<SSHCommandTimeoutError: cmd="%s",timeout=%s)>' % (
+        return '<SSHCommandTimeoutError: cmd="{}",timeout={})>'.format(
             self.cmd,
             self.timeout,
         )
@@ -86,7 +104,7 @@ class SSHCommandTimeoutError(Exception):
         return self.__repr__()
 
 
-class BaseSSHClient(object):
+class BaseSSHClient:
     """
     Base class representing a connection over SSH/SCP to a remote node.
     """
@@ -283,11 +301,9 @@ class ParamikoSSHClient(BaseSSHClient):
         :type use_compression: ``bool``
         """
         if key_files and key_material:
-            raise ValueError(
-                ("key_files and key_material arguments are " "mutually exclusive")
-            )
+            raise ValueError("key_files and key_material arguments are " "mutually exclusive")
 
-        super(ParamikoSSHClient, self).__init__(
+        super().__init__(
             hostname=hostname,
             port=port,
             username=username,
@@ -302,7 +318,9 @@ class ParamikoSSHClient(BaseSSHClient):
         self.use_compression = use_compression
 
         self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # Long term we should switch to a more secure default, but this would break
+        # a lot  of non-interactive deployment scripts
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec
         self.logger = self._get_and_setup_logger()
 
         # This object is lazily created on first SFTP operation (e.g. put()
@@ -325,9 +343,7 @@ class ParamikoSSHClient(BaseSSHClient):
             conninfo["key_filename"] = self.key_files
 
         if self.key_material:
-            conninfo["pkey"] = self._get_pkey_object(
-                key=self.key_material, password=self.password
-            )
+            conninfo["pkey"] = self._get_pkey_object(key=self.key_material, password=self.password)
 
         if not self.password and not (self.key_files or self.key_material):
             conninfo["allow_agent"] = True
@@ -345,7 +361,7 @@ class ParamikoSSHClient(BaseSSHClient):
             and not isinstance(self.key_files, (list, tuple))
             and os.path.isfile(self.key_files)
         ):
-            with open(self.key_files, "r") as fp:
+            with open(self.key_files) as fp:
                 key_material = fp.read()
 
             try:
@@ -377,7 +393,27 @@ class ParamikoSSHClient(BaseSSHClient):
 
         self.logger.debug("Connecting to server", extra=extra)
 
-        self.client.connect(**conninfo)
+        try:
+            self.client.connect(**conninfo)
+        except paramiko.ssh_exception.AuthenticationException as e:
+            # Special case to handle paramiko >= 2.9.0 which supports SHA-2
+            # variants of the RSA key verification algorithm which don't work
+            # with older OpenSSH server versions (e.g. default setup on Ubuntu
+            # 14.04).
+            # Sadly there is no way for us to catch and retry on more specific
+            # / granular exception.
+            # See https://www.paramiko.org/changelog.html for details.
+            if (
+                PARAMIKO_VERSION_TUPLE >= (2, 9, 0)
+                and LIBCLOUD_PARAMIKO_SHA2_BACKWARD_COMPATIBILITY
+            ):
+                self.logger.warn(SHA2_PUBKEY_NOT_SUPPORTED_AUTH_ERROR_MSG)
+
+                conninfo["disabled_algorithms"] = {"pubkeys": ["rsa-sha2-256", "rsa-sha2-512"]}
+                self.client.connect(**conninfo)
+            else:
+                raise e
+
         return True
 
     def put(self, path, contents=None, chmod=None, mode="w"):
@@ -399,7 +435,7 @@ class ParamikoSSHClient(BaseSSHClient):
             if part != "":
                 try:
                     sftp.mkdir(part)
-                except IOError:
+                except OSError:
                     # so, there doesn't seem to be a way to
                     # catch EEXIST consistently *sigh*
                     pass
@@ -443,7 +479,7 @@ class ParamikoSSHClient(BaseSSHClient):
             if part != "":
                 try:
                     sftp.mkdir(part)
-                except IOError:
+                except OSError:
                     # so, there doesn't seem to be a way to
                     # catch EEXIST consistently *sigh*
                     pass
@@ -629,7 +665,7 @@ class ParamikoSSHClient(BaseSSHClient):
         ]
 
         paramiko_version = getattr(paramiko, "__version__", "0.0.0")
-        paramiko_version = tuple([int(c) for c in paramiko_version.split(".")])
+        paramiko_version = tuple(int(c) for c in paramiko_version.split("."))
 
         if paramiko_version >= (2, 2, 0):
             # Ed25519 is only supported in paramiko >= 2.2.0
@@ -659,9 +695,8 @@ class ParamikoSSHClient(BaseSSHClient):
                 raise e
             except (paramiko.ssh_exception.SSHException, AssertionError) as e:
                 if "private key file checkints do not match" in str(e).lower():
-                    msg = (
-                        "Invalid password provided for encrypted key. "
-                        "Original error: %s" % (str(e))
+                    msg = "Invalid password provided for encrypted key. " "Original error: %s" % (
+                        str(e)
                     )
                     # Indicates invalid password for password protected keys
                     raise paramiko.ssh_exception.SSHException(msg)
@@ -775,7 +810,7 @@ class ShellOutSSHClient(BaseSSHClient):
         key_files=None,  # type: Optional[str]
         timeout=None,  # type: Optional[float]
     ):
-        super(ShellOutSSHClient, self).__init__(
+        super().__init__(
             hostname=hostname,
             port=port,
             username=username,
@@ -787,9 +822,7 @@ class ShellOutSSHClient(BaseSSHClient):
         if self.password:
             raise ValueError("ShellOutSSHClient only supports key auth")
 
-        child = subprocess.Popen(
-            ["ssh"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+        child = subprocess.Popen(["ssh"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         child.communicate()
 
         if child.returncode == 127:
@@ -815,7 +848,7 @@ class ShellOutSSHClient(BaseSSHClient):
         else:
             raise ValueError("Invalid mode: " + mode)
 
-        cmd = ['echo "%s" %s %s' % (contents, redirect, path)]
+        cmd = ['echo "{}" {} {}'.format(contents, redirect, path)]
         self._run_remote_shell_command(cmd)
         return path
 
@@ -842,7 +875,7 @@ class ShellOutSSHClient(BaseSSHClient):
         if self.timeout:
             cmd += ["-oConnectTimeout=%s" % (self.timeout)]
 
-        cmd += ["%s@%s" % (self.username, self.hostname)]
+        cmd += ["{}@{}".format(self.username, self.hostname)]
 
         return cmd
 
@@ -862,9 +895,7 @@ class ShellOutSSHClient(BaseSSHClient):
 
         self.logger.debug('Executing command: "%s"' % (" ".join(full_cmd)))
 
-        child = subprocess.Popen(
-            full_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+        child = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = child.communicate()
 
         stdout_str = cast(str, stdout)
