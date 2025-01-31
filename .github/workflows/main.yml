@@ -42,9 +42,6 @@ jobs:
           - "pypy-3.8"
         os:
           - ubuntu-latest
-        include:
-          - python_version: pyjion
-            os: ubuntu-20.04
 
     steps:
       - uses: actions/checkout@master
@@ -52,7 +49,6 @@ jobs:
           fetch-depth: 1
 
       - name: Use Python ${{ matrix.python_version }}
-        if: ${{ matrix.python_version != 'pyjion' }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python_version }}
@@ -62,28 +58,6 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq gcc libvirt-dev
 
-      - name: Use Python 3.10 (pyjion)
-        if: ${{ matrix.python_version == 'pyjion' }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      # From https://github.com/tonybaloney/Pyjion/blob/develop/main/.github/workflows/benchmark.yml#L26 (MIT)
-      - name: Install OS / deb dependencies
-        if: ${{ matrix.python_version == 'pyjion' }}
-        run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq cmake llvm-9 clang-9 autoconf automake \
-          libtool build-essential python curl git lldb-6.0 liblldb-6.0-dev \
-          libunwind8 libunwind8-dev gettext libicu-dev liblttng-ust-dev \
-          libssl-dev libnuma-dev libkrb5-dev zlib1g-dev
-
-      - name: Setup Dotnet 6
-        if: ${{ matrix.python_version == 'pyjion' }}
-        uses: actions/setup-dotnet@v4.0.0
-        with:
-          dotnet-version: "6.0.100"
-
       - name: Cache Python Dependencies
         uses: actions/cache@v4
         with:
@@ -91,11 +65,6 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-tests.txt', '') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
-      - name: Install Pyjion
-        if: ${{ matrix.python_version == 'pyjion' }}
-        run: |
-          pip install pyjion
 
       - name: Install Python Dependencies
         run: |
@@ -107,7 +76,7 @@ jobs:
 
       - name: Run dist install checks tox target
         # NOTE: 3.12 will be failing until we migrate away from setup.py
-        if: ${{ matrix.python_version != 'pypy-3.7' && matrix.python_version != 'pypy-3.8' && matrix.python_version != 'pyjion' && matrix.python_version != '3.12-dev' }}
+        if: ${{ matrix.python_version != 'pypy-3.7' && matrix.python_version != 'pypy-3.8' && matrix.python_version != '3.12-dev' }}
         run: |
          tox -e py${{ matrix.python_version }}-dist,py${{ matrix.python_version }}-dist-wheel
 
