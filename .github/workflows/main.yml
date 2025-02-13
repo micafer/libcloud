@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - trunk
+      - im
 #  schedule:
 #    - cron: '0 1 * * *'
 

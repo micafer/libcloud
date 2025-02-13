@@ -2005,6 +2005,11 @@ class OpenStack_2_Tests(OpenStack_1_1_Tests):
         # normally authentication happens lazily, but we force it here
         self.driver.volumev3_connection._populate_hosts_and_request_paths()
 
+        self.driver_klass.reservation_connectionCls.conn_class = OpenStack_2_0_MockHttp
+        self.driver_klass.reservation_connectionCls.auth_url = "https://auth.api.example.com"
+        # normally authentication happens lazily, but we force it here
+        self.driver.reservation_connection._populate_hosts_and_request_paths()
+
     def test__paginated_request_single_page(self):
         snapshots = self.driver._paginated_request(
             "/snapshots/detail", "snapshots", self.driver._get_volume_connection()
@@ -2556,6 +2561,15 @@ class OpenStack_2_Tests(OpenStack_1_1_Tests):
         port_id = "ce531f90-199f-48c0-816c-13e38010b442"
 
         self.assertTrue(self.driver.ex_attach_floating_ip_to_node(node, ip, port_id))
+
+    def test_ex_list_leases(self):
+        leases = self.driver.ex_list_leases()
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0].id, "6ee55c78-ac52-41a6-99af-2d2d73bcc466")
+        self.assertEqual(leases[0].name, "lease_foo")
+        self.assertEqual(leases[0].start, "2017-12-26T12:00:00.000000")
+        self.assertEqual(leases[0].end, "2017-12-27T12:00:00.000000")
+        self.assertEqual(leases[0].status, "PENDING")
 
 
 class OpenStack_1_1_FactoryMethodTests(OpenStack_1_1_Tests):
@@ -4004,6 +4018,16 @@ class OpenStack_1_1_MockHttp(MockHttp, unittest.TestCase):
                 httplib.responses[httplib.OK],
             )
 
+    def _v1_leases(self, method, url, body, headers):
+        if method == "GET":
+            body = self.fixtures.load("_leases.json")
+
+            return (
+                httplib.OK,
+                body,
+                self.json_content_headers,
+                httplib.responses[httplib.OK],
+            )
 
 # This exists because the nova compute url in devstack has v2 in there but the v1.1 fixtures
 # work fine.
