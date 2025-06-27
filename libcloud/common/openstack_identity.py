@@ -358,9 +358,6 @@ class OpenStackServiceCatalog:
             if service_type and entry.service_type != service_type:
                 continue
 
-            if name and entry.service_name != name:
-                continue
-
             for endpoint in entry.endpoints:
                 if region and endpoint.region != region:
                     continue
