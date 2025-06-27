@@ -110,7 +110,7 @@ class OpenStackVolumeV2Connection(OpenStackBaseConnection):
 
 class OpenStackVolumeV3Connection(OpenStackBaseConnection):
     service_type = "volumev3"
-    service_name = "cinderv3"
+    # service_name = "cinderv3"
     service_region = "RegionOne"
 
 
