@@ -4649,13 +4649,15 @@ class OpenStack_2_FloatingIpPool:
             extra=extra,
         )
 
-    def list_floating_ips(self):
+    def list_floating_ips(self, project_id=None):
         """
         List floating IPs in the pool
 
         :rtype: ``list`` of :class:`OpenStack_2_FloatingIpAddress`
         """
         url = "/v2.0/floatingips?floating_network_id=%s" % self.id
+        if project_id:
+            url += "&project_id=%s" % project_id
         return self._to_floating_ips(self.connection.request(url).object)
 
     def get_floating_ip(self, ip):
